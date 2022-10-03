@@ -82,6 +82,8 @@ class CNV_Profile:
 
         self.event_trees = self._init_all_chrom()
         self.phylogeny = Phylogeny(num_subclones)
+        self.phase_switching_intervals = self.generate_phase_switching()
+
         self.cnv_trees = None
         self.cnv_profile_df = None
         self.phased_profile_df = None
@@ -472,9 +474,9 @@ class CNV_Profile:
 
         snv_df['adjusted_depth'] = np.floor(snv_df['DEPTH'].values * snv_df['ploidy'].values / 2).astype(int)
         
-        # generate phase switch profile
+        # use phase switching profile from simulation for consistancy
         # chromosome interval trees: False if phase switched
-        correct_phase_interval_trees = self.generate_phase_switching()
+        correct_phase_interval_trees = self.phase_switching_intervals
 
         # calculate alt counts for each SNV
         if do_parallel:
