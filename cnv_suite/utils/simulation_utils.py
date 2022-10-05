@@ -9,7 +9,6 @@ def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase)
     If both alleles have mutation (homozygous mutation), returns the given coverage. If neither allele has mutation,
     returns 0. Also adjusts for phasing by the boolean correct_phase."""
     if not correct_phase:
-        m_prop, p_prop = p_prop, m_prop
         m_present, p_present = p_present, m_present
 
     if m_present and p_present:
