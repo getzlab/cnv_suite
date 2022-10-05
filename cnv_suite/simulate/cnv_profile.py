@@ -503,19 +503,29 @@ class CNV_Profile:
     # generates seg file using poisson variance and beta noise for sigma
     def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity):
         snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity)
+        # restrict to only het sites (some methods may be passing depths that include homozygous vars
+        snv_df = snv_df.loc[(snv_df['NA12878'] != '1|1') &
+                             (snv_df.REF.apply(lambda x : len(x)) == 1) &
+                             (snv_df.ALT.apply(lambda x : len(x)) == 1)]
+        
         # get allele counts from snv_df
-        A_alt_mask = snv_df.NA12878.apply(lambda x: int(x[0]) ==1)
+        maternal_mask = snv_df.maternal_present.values.copy()
+        # take into account simulated phase switching
+        correct_phase = snv_df.apply(lambda x : self.phase_switching_intervals[x['CHROM']][x['POS']].pop().data, axis=1)
+        maternal_mask[~correct_phase] = ~maternal_mask[~correct_phase]
         snv_df.loc[:, 'A_count'] = 0
         snv_df.loc[:, 'B_count'] = 0
-        snv_df.loc[A_alt_mask, 'A_count'] = snv_df.loc[A_alt_mask, 'alt_count']
-        snv_df.loc[~A_alt_mask, 'A_count'] = snv_df.loc[~A_alt_mask, 'ref_count']
-        snv_df.loc[~A_alt_mask, 'B_count'] = snv_df.loc[~A_alt_mask, 'alt_count']
-        snv_df.loc[A_alt_mask, 'B_count'] = snv_df.loc[A_alt_mask, 'ref_count']
+        snv_df.loc[maternal_mask, 'A_count'] = snv_df.loc[maternal_mask, 'alt_count']
+        snv_df.loc[~maternal_mask, 'A_count'] = snv_df.loc[~maternal_mask, 'ref_count']
+        snv_df.loc[~maternal_mask, 'B_count'] = snv_df.loc[~maternal_mask, 'alt_count']
+        snv_df.loc[maternal_mask, 'B_count'] = snv_df.loc[maternal_mask, 'ref_count']
         phased_counts = snv_df[['CHROM', 'POS', 'A_count', 'B_count']]
         
         Cov = pd.read_csv(og_coverage_bed, sep="\t", names=["chr", "start", "end", "covcorr", "mean_frag_len", "std_frag_len", "num_frags", "tot_reads", "fail_reads"], low_memory=False)
-        filt = Cov.loc[Cov.mean_frag_len > 0]
         # filter out zero bins
+        filt = Cov.loc[Cov.mean_frag_len > 0]
+        
+        # use mean fragcorr of normal to estimate coverage
         mean_allele_cov = filt.covcorr.mean() / filt.mean_frag_len.mean() / 2
         
         prof_df = self.cnv_profile_df.reset_index(drop=True).rename({'mu.major': 'major_ploidy', 'mu.minor':'minor_ploidy'}, axis=1)
@@ -537,8 +547,6 @@ class CNV_Profile:
             minor_mu, minor_sigma = minor_samples.mean(), minor_samples.std()
             prof_df.at[i,['mu.major', 'sigma.major']] = major_mu, major_sigma
             prof_df.at[i,['mu.minor', 'sigma.minor']] = minor_mu, minor_sigma
-        #prof_df.loc[:, 'sigma.minor'] = np.sqrt(prof_df.loc[:, 'mu.minor'])
-        #prof_df.loc[:, 'sigma.major'] = np.sqrt(prof_df.loc[:, 'mu.major'])
 
         #prof_df[['Chromosome', 'Start.bp', 'End.bp', 'mu.major', 'mu.minor',
         #         'sigma.major', 'sigma.minor']].to_csv(filename, sep='\t', index=False)
@@ -551,7 +559,8 @@ class CNV_Profile:
             start = 1
             correct_phase = True
             while start < size:
-                interval_len = np.floor(np.random.exponential(1e6))
+                # assume average recombination rate of 1cM/Mb
+                interval_len = np.random.geometric(1e-8)
                 tree[start:start+interval_len] = correct_phase
                 correct_phase = not correct_phase
                 start += interval_len
