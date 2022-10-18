@@ -538,8 +538,8 @@ class CNV_Profile:
             major_mu, major_sigma = major_samples.mean(), major_samples.std()
             minor_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(B,A, size = 10000))
             minor_mu, minor_sigma = minor_samples.mean(), minor_samples.std()
-            prof_df.at[i,['mu.major', 'sigma.major']] = major_mu, major_sigma
-            prof_df.at[i,['mu.minor', 'sigma.minor']] = minor_mu, minor_sigma
+            prof_df.loc[i,['mu.major', 'sigma.major']] = major_mu, major_sigma
+            prof_df.loc[i,['mu.minor', 'sigma.minor']] = minor_mu, minor_sigma
 
         #prof_df[['Chromosome', 'Start.bp', 'End.bp', 'mu.major', 'mu.minor',
         #         'sigma.major', 'sigma.minor']].to_csv(filename, sep='\t', index=False)
