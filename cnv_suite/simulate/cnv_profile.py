@@ -494,8 +494,8 @@ class CNV_Profile:
                                                                                       'REF_COUNT', 'ALT_COUNT']].to_csv(filename, sep='\t', index=False)
     
     # generates seg file using poisson variance and beta noise for sigma
-    def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity):
-        snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity)
+    def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity, do_parallel=True):
+        snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity, do_parallel = do_parallel)
         # restrict to only het sites (some methods may be passing depths that include homozygous vars
         snv_df = snv_df.loc[(snv_df['NA12878'] != '1|1') &
                              (snv_df.REF.apply(lambda x : len(x)) == 1) &
