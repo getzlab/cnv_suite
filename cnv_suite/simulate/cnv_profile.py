@@ -689,12 +689,22 @@ class Phylogeny:
         """
         self.num_subclones = num_subclones
         self.parents, self.ccfs = self.make_phylogeny()
+    
+    # taken from capy
+    ## Given original interval I0 = [s0 e0] and new interval I1 = [s1 e1],
+    ## maps coordinates c0 in I0 to c1 in I1.
+    @staticmethod    
+    def interval_remap(c0, s0, e0, s1, e1):
+        return (c0 - s0)/(e0 - s0)*(e1 - s1) + s1
 
     def make_phylogeny(self):
         """Greedy algorithm to assign children clones in correct phylogeny based on random CCFs
         
         :return: (dict, dict) representing the parent and ccfs dictionaries"""
-        ccfs = sorted(np.random.rand(self.num_subclones), reverse=True)
+        
+        # force ccfs to be in [0.05, 0.95] for detectability
+        ccfs = interval_remap(np.random.rand(self.num_subclones), 0, 1, 0.05, 0.95)
+        ccfs = sorted(ccfs, reverse=True)
         ccfs = {cluster + 2: ccf for cluster, ccf in enumerate(ccfs)}
         parent_dict = {1: None}
 
