@@ -703,7 +703,7 @@ class Phylogeny:
         :return: (dict, dict) representing the parent and ccfs dictionaries"""
         
         # force ccfs to be in [0.05, 0.95] for detectability
-        ccfs = interval_remap(np.random.rand(self.num_subclones), 0, 1, 0.05, 0.95)
+        ccfs = self.interval_remap(np.random.rand(self.num_subclones), 0, 1, 0.05, 0.95)
         ccfs = sorted(ccfs, reverse=True)
         ccfs = {cluster + 2: ccf for cluster, ccf in enumerate(ccfs)}
         parent_dict = {1: None}
