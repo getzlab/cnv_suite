@@ -27,7 +27,7 @@ def plot_acr_static(seg_df, ax, csize,
     if not min_seg_lw:
         min_seg_lw = 2
     if not y_upper_lim:
-        y_upper_lim = 2
+        y_upper_lim = int(np.ceil(seg_df['mu.major'].max()))
 
     seg_df, chr_order, chrom_start = prepare_df(seg_df, csize, suffix='.bp')
     add_background(ax, chr_order, csize, height=max(7, y_upper_lim+1))
