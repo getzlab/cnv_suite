@@ -486,9 +486,9 @@ class CNV_Profile:
 
         return snv_df, correct_phase_interval_trees
 
-    def save_hets_file(self, filename, vcf, bed, purity):
+    def save_hets_file(self, filename, vcf, bed, purity, do_parallel = False):
         """Generate SNV adjusted depths for given purity for given bed file and save output to filename"""
-        vcf_df, _ = self.generate_snvs(vcf, bed, purity)
+        vcf_df, _ = self.generate_snvs(vcf, bed, purity, do_parallel=do_parallel)
         vcf_df.rename(columns={'CHROM': 'CONTIG', 'POS': 'POSITION',
                                 'ref_count': 'REF_COUNT', 'alt_count': 'ALT_COUNT'})[['CONTIG', 'POSITION',
                                                                                       'REF_COUNT', 'ALT_COUNT']].to_csv(filename, sep='\t', index=False)
