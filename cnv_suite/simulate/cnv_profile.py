@@ -494,7 +494,7 @@ class CNV_Profile:
                                                                                       'REF_COUNT', 'ALT_COUNT']].to_csv(filename, sep='\t', index=False)
     
     # generates seg file using poisson variance and beta noise for sigma
-    def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity, do_parallel=True):
+    def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity, do_parallel=True, return_avg_acov=False):
         snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity, do_parallel = do_parallel)
         # restrict to only het sites (some methods may be passing depths that include homozygous vars
         snv_df = snv_df.loc[(snv_df['NA12878'] != '1|1') &
@@ -544,7 +544,10 @@ class CNV_Profile:
         #prof_df[['Chromosome', 'Start.bp', 'End.bp', 'mu.major', 'mu.minor',
         #         'sigma.major', 'sigma.minor']].to_csv(filename, sep='\t', index=False)
         prof_df.to_csv(filename, sep='\t', index=False)
-    
+        
+        if return_avg_acov:
+            return mean_allele_cov
+ 
     def generate_phase_switching(self):
         phase_switches = {}
         for chrom, size in self.csize.items():
