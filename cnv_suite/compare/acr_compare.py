@@ -10,6 +10,11 @@ from scipy.optimize import minimize
 
 STAT_COLUMNS = ['mu.minor', 'sigma.minor', 'mu.major', 'sigma.major']
 
+# Given original interval I0 = [s0 e0] and new interval I1 = [s1 e1],
+# maps coordinates c0 in I0 to c1 in I1.
+
+def interval_remap(c0, s0, e0, s1, e1):
+    return (c0 - s0)/(e0 - s0)*(e1 - s1) + s1
 
 def acr_compare(file_1=None, file_2=None, fit_params=False):
     """
@@ -32,80 +37,66 @@ def acr_compare(file_1=None, file_2=None, fit_params=False):
 
     # take union of segments to allocate bins
     bins = get_union(seg1, seg2)
-    if fit_params:
-        # pick good starting point for scale factor
-        shared_bins = bins.loc[~bins.unique]
-        avg1 = np.average(shared_bins['mu.major_1'], weights=shared_bins['length'])
-        avg2 = np.average(shared_bins['mu.major_2'], weights=shared_bins['length'])
-        scale_guess = avg2 / avg1
-
-        minimization_result = minimize(MAD_helper, x0=np.array([scale_guess, 0.5]),
-                                   args=bins, method='Powell',
-                                   bounds=[(0.00001, 2000), (0,1)],
-                                   options={'xtol': 0.000001, 'ftol': 0.00001})
     
-        optimal_scale_factor = minimization_result.x[0]
-        optimal_purity = minimization_result.x[1]
+    # compute upper bound and lower bound of the interval
+    shared_bins = bins.loc[~bins.unique]
+    lb = shared_bins['mu.minor_1'].min()
+    ub = shared_bins['mu.major_1'].max()
+    if fit_params:
+        # pick good starting point for new interval bounds
+        lb_guess = shared_bins['mu.minor_2'].min()
+        ub_guess = shared_bins['mu.major_2'].max()
+
+        minimization_result = minimize(MAD_int_helper, x0=np.array([lb_guess, ub_guess]),
+                                   args=(bins, lb, ub), method='Powell',
+                                   options={'xtol': 0.0001, 'ftol': 0.0001})
+    
+        optimal_lb = minimization_result.x[0]
+        optimal_ub = minimization_result.x[1]
         params = minimization_result.x
     else:
         params = None
-        optimal_scale_factor, optimal_purity = 0,0
-    overlap_score, maj_ov, min_ov = get_MAD(bins, params)
+        optimal_lb, optimal_ub = 0,0
+
+    overlap_score, maj_ov, min_ov = get_MAD_interval(bins, lb, ub, params)
     bins["major_overlap"] = maj_ov
     bins["minor_overlap"] = min_ov
 
     if fit_params:
-        bins["mu.major_1"] = bins.apply(lambda x: optimal_scale_factor * (optimal_purity * (x["mu.major_1"] - 1) + 1), axis=1)
-        bins["mu.minor_1"] = bins.apply(lambda x: optimal_scale_factor * (optimal_purity * (x["mu.minor_1"] - 1) + 1), axis=1)
+        bins["mu.major_1"] = bins.apply(lambda x: interval_remap(x["mu.major_1"], lb, ub, optimal_lb, optimal_ub), axis=1)
+        bins["mu.minor_1"] = bins.apply(lambda x: interval_remap(x["mu.minor_1"], lb, ub, optimal_lb, optimal_ub), axis=1)
         if "sigma.major_1" in bins.columns and "sigma.minor_1" in bins.columns:
-            bins["sigma.major_1"] *= optimal_scale_factor
-            bins["sigma.minor_1"] *= optimal_scale_factor
+            bins["sigma.major_1"] *= (optimal_ub - optimal_lb) / (ub - lb)
+            bins["sigma.minor_1"] *= (optimal_ub - optimal_lb) / (ub - lb)
 
     non_overlap_length = int(bins['length_1_unique'].sum()) + int(bins['length_2_unique'].sum())
     overlap_length = int(bins['length_overlap'].sum())
 
-    return overlap_score, optimal_scale_factor, optimal_purity, non_overlap_length, overlap_length, bins
+    return overlap_score, optimal_lb, optimal_ub, non_overlap_length, overlap_length, bins
 
-def MAD_helper(params, bins):
+def MAD_int_helper(params, bins, lb, ub):
     """
     Return just the inverse overlap score for optimization minimize function.
     """
-    MAD, _, _ = get_MAD(bins, params)
+    MAD, _, _ = get_MAD_interval(bins, lb, ub, params)
     return MAD
 
-def calc_abs_distance(mu1, mu2, unique, params=np.array([1.,1.])):
-    """
-    Calculate the absolute deviation of the mus
-
-
-    :param mu1: mean of distribution 1
-    :param mu2: mean of distribution 2
-    :param unique: boolean, if bin represents a non-overlapping, unique segment
-    :param params: np array of shape (1,2) containing scale factor and purity
-    :return: absolute deviataion between the mus
-    """
-    if unique:
-        return 0
-    if params is None:
-        params=np.array([1., 1,])
-    scale_factor, purity = params
-    mu1 = scale_factor * (purity * (mu1 - 1) + 1)
-    return abs(mu1 - mu2)
-
-def get_MAD(bins, params=None):
+def get_MAD_interval(bins, lb, ub, params=None):
     """
     Calculate the mean absolute difference for the major and minor alleles and get the average weighted by length
+    if new upper bound and lower bound params are passed the MAD is computed on the transformed values
 
     :param params: np array of shape (1,2) containing scale factor and purity
     :param bins: bins dataframe
     :return: MAD, major MAD series, and minor MAD series
     """
-    
+
     if params is None:
-        params=np.array([1., 1,])
-    scale_factor, purity = params
-    maj_mu1 = scale_factor * (purity * (bins['mu.major_1'].values - 1) + 1)
-    min_mu1 = scale_factor * (purity * (bins['mu.minor_1'].values - 1) + 1)
+        params=np.array([lb, ub])
+
+    new_lb, new_ub = params
+    maj_mu1 = interval_remap(bins['mu.major_1'].values, lb, ub, new_lb, new_ub)
+    min_mu1 = interval_remap(bins['mu.minor_1'].values, lb, ub, new_lb, new_ub)
     
     major_overlap = bins['mu.major_2'].subtract(maj_mu1).abs().fillna(0)
     minor_overlap = bins['mu.minor_2'].subtract(min_mu1).abs().fillna(0)
@@ -114,7 +105,7 @@ def get_MAD(bins, params=None):
     overlap_score = np.average(np.concatenate((major_overlap, minor_overlap)),
                                weights=np.concatenate([bins['length'], bins['length']]))
     return overlap_score, major_overlap, minor_overlap
-    
+
 def overlap_min_helper(params, bins):
     """
     Return just the inverse overlap score for optimization minimize function.
