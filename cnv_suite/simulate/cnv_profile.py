@@ -534,9 +534,9 @@ class CNV_Profile:
                 continue
             A,B = (A,B) if A >B else (B, A)
             purity_corrected_cov = (mean_allele_cov * tot_ploidy * purity) + (mean_allele_cov * (1-purity) * 2)
-            major_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(A,B, size = 10000))
+            major_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(A + 0.01, B + 0.01, size = 10000))
             major_mu, major_sigma = major_samples.mean(), major_samples.std()
-            minor_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(B,A, size = 10000))
+            minor_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(B + 0.01, A + 0.01, size = 10000))
             minor_mu, minor_sigma = minor_samples.mean(), minor_samples.std()
             prof_df.loc[i,['mu.major', 'sigma.major']] = major_mu, major_sigma
             prof_df.loc[i,['mu.minor', 'sigma.minor']] = minor_mu, minor_sigma
