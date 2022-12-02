@@ -328,12 +328,21 @@ class CNV_Profile:
 
         self.cnv_profile_df = pd.concat(cnv_df).sort_values(['Chromosome', 'Start.bp'], key=natsort_keygen())
         self.phased_profile_df = pd.concat(phasing_df).sort_values(['Chromosome', 'Start.bp'], key=natsort_keygen())
-
+    
+    
+    # wrapper method for computing simulated coverage from binned covcollect coverage
     def generate_coverage(self, purity, cov_binned, x_coverage=None, sigma=None, do_parallel=True):
+        x_coverage_df = pd.read_csv(cov_binned, sep='\t', names=['chrom', 'start', 'end', 'covcorr',
+                                                                 'mean_fraglen', 'sqrt_avg_fragvar', 'n_frags',
+                                                                 'tot_reads', 'reads_flagged'],
+                                    low_memory=False, header=None)
+        compute_coverage(x_coverage_df, purity, x_coverage=x_coverage, sigma=sigma, do_parallel=do_parallel)
+ 
+    def compute_coverage(self, x_coverage_df, purity, x_coverage=None, sigma=None, do_parallel=True):
         """Generate binned coverage profile based on purity and copy number profile.
 
         :param purity: desired purity/tumor fraction of tumor sample
-        :param cov_binned: tsv file with binned coverage for genome
+        :param x_coverage_df: df with binned coverage for genome
         :param x_coverage: optional integer to overwrite cov_binned coverage values with Log-Normal Poisson values with lambda=x_coverage
         :param sigma: optional value for Log-Normal sigma value
         :param do_parallel: boolean option to parallelize with pandarallel
@@ -350,10 +359,9 @@ class CNV_Profile:
             print('cnv_trees not computed yet. Run calculate_profiles() before generating coverage.')
             return None
 
-        x_coverage_df = pd.read_csv(cov_binned, sep='\t', names=['chrom', 'start', 'end', 'covcorr',
-                                                                 'mean_fraglen', 'sqrt_avg_fragvar', 'n_frags',
-                                                                 'tot_reads', 'reads_flagged'],
-                                    low_memory=False, header=None)
+        initial_columns = list(x_coverage_df.columns)
+        if not all([col in initial_columns for col in ['chrom', 'start', 'end', 'covcorr']]):
+            raise ValueError("missing essential columns in coverage dataframe, expected 'chrom', 'start', 'end', 'covcorr'")
         
         # remove mitocondrial contigs if they exist
         x_coverage_df = x_coverage_df.loc[x_coverage_df.chrom != 'chrM'] 
@@ -397,7 +405,7 @@ class CNV_Profile:
         x_coverage_df['covcorr_original'] = x_coverage_df['covcorr']
         x_coverage_df['covcorr'] = np.floor(x_coverage_df['covcorr'].values * x_coverage_df['ploidy'].values / 2).astype(int)
 
-        return x_coverage_df[['chrom', 'start', 'end', 'covcorr', 'mean_fraglen', 'sqrt_avg_fragvar', 'n_frags', 'tot_reads', 'reads_flagged', 'ploidy', 'covcorr_original']]
+        return x_coverage_df[initial_columns + ['ploidy', 'covcorr_original']]
 
     def save_coverage_file(self, filename, purity, cov_binned_file, x_coverage=None, sigma=None, do_parallel=True):
         """Generate coverage for given purity and binned coverage file and save output to filename"""
