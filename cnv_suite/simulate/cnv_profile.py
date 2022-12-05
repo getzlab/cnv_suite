@@ -336,7 +336,7 @@ class CNV_Profile:
                                                                  'mean_fraglen', 'sqrt_avg_fragvar', 'n_frags',
                                                                  'tot_reads', 'reads_flagged'],
                                     low_memory=False, header=None)
-        compute_coverage(x_coverage_df, purity, x_coverage=x_coverage, sigma=sigma, do_parallel=do_parallel)
+        self.compute_coverage(x_coverage_df, purity, x_coverage=x_coverage, sigma=sigma, do_parallel=do_parallel)
  
     def compute_coverage(self, x_coverage_df, purity, x_coverage=None, sigma=None, do_parallel=True):
         """Generate binned coverage profile based on purity and copy number profile.
