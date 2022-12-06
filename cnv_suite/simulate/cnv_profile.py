@@ -621,12 +621,16 @@ class CNV_Profile:
         if return_avg_acov:
             return mean_allele_cov
 
-    def add_ccf_annotations(self, input_segfile_df):
-        ccfs = input_segfile_df.apply(lambda x: self.find_interval_ccfs(str(int(x.Chromosome)),
+    def add_ccf_annotations(self, seg_df, annotate_all=True):
+        mask = np.full(len(seg_df), True) if annotate_all else ~seg_df.unique
+        seg_df['major_ccf'] = np.nan
+        seg_df['minor_ccf'] = np.nan
+        
+        ccfs = seg_df.loc[mask].apply(lambda x: self.find_interval_ccfs(str(int(x.Chromosome)),
                                                                          x['Start.bp'], x['End.bp']), axis=1)
-        input_segfile_df.loc[:, ['major_ccf', 'minor_ccf']] = np.array([[c[0] for c in ccfs], [c[1] for c in ccfs]]).T
+        seg_df.loc[mask, ['major_ccf', 'minor_ccf']] = np.array([[c[0] for c in ccfs], [c[1] for c in ccfs]]).T
 
-        return input_segfile_df
+        return seg_df
     
     def generate_phase_switching(self):
         phase_switches = {}
