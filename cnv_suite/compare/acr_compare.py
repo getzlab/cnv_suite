@@ -329,7 +329,7 @@ def append_bin(start, end, stats1, stats2, chromosome):
     elif stats1 is None:
         length_2_unique = length
 
-    bin_dict = {'chromosome': chromosome,
+    bin_dict = {'Chromosome': chromosome,
                 'Start.bp': start,
                 'End.bp': end,
                 'unique': unique,
