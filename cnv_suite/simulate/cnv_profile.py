@@ -621,7 +621,7 @@ class CNV_Profile:
         if return_avg_acov:
             return mean_allele_cov
 
-    def add_ccf_annotations(self, seg_df, annotate_all=True):
+    def add_ccf_annotations(self, seg_df, annotate_all=False):
         mask = np.full(len(seg_df), True) if annotate_all else ~seg_df.unique
         seg_df['major_ccf'] = np.nan
         seg_df['minor_ccf'] = np.nan
