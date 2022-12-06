@@ -501,15 +501,21 @@ class CNV_Profile:
                                 'ref_count': 'REF_COUNT', 'alt_count': 'ALT_COUNT'})[['CONTIG', 'POSITION',
                                                                                       'REF_COUNT', 'ALT_COUNT']].to_csv(filename, sep='\t', index=False)
    
-    # find ccf for a given interval
-    # ccf is only defined when a single lineage event is present at a loci, otherwise nan is returned
-    def find_interval_ccf(self, chrom, start, end):
+    # find major and minor ccfs for a given interval
+    # ccf is only defined when a single lineage event is present on a allele, otherwise nan is returned
+    def find_interval_ccfs(self, chrom, start, end):
         interval_list = list(self.event_trees[chrom].paternal_tree[start:end]) + list(self.event_trees[chrom].maternal_tree[start:end])
         def _intervals_to_df(int_list):
             res = []
             for interval in int_list:
                 res.append((interval.begin, interval.end, interval.data.type, interval.data.allele, interval.data.cluster_num, interval.data.cn_change))
             res_df = pd.DataFrame(res, columns = ['start', 'end', 'type', 'allele', 'cluster_num', 'cn_change'])
+            
+            # make sure the input interval only intersects a single copy state
+            # i.e. none of the overlapped events start or end within the interval
+            if any(res_df.start > start) or any(res_df.end < end):
+                raise ValueError("interval intersected multiple copy states")
+
             return res_df
 
         interval_df = _intervals_to_df(interval_list)
@@ -522,14 +528,44 @@ class CNV_Profile:
             return df.reset_index()
 
         reduced_df = _reduce_and_filter_int_df(interval_df)
+
+        # if diploid, short circuit and return 1s 
         if len(reduced_df) == 0:
-            return 1.0
-        else:
-            clusters = reduced_df.cluster_num.unique()
-            if len(clusters) > 1:
-                return np.nan
+            return 1.0, 1.0
+        
+        # determine major and minor alleles
+        allele_cn_sum_dict = reduced_df.groupby('allele').agg({'cn_change':'sum'}).cn_change.to_dict()
+        maternal_cn_delta = allele_cn_sum_dict['maternal'] if 'maternal' in allele_cn_sum_dict else 0
+        paternal_cn_delta = allele_cn_sum_dict['paternal'] if 'paternal' in allele_cn_sum_dict else 0
+        major_allele = 'maternal' if maternal_cn_delta > paternal_cn_delta else 'paternal'
+        minor_allele = 'paternal' if major_allele == 'maternal' else 'maternal'
+
+        major_df = reduced_df.loc[reduced_df['allele'] == major_allele]
+        minor_df = reduced_df.loc[reduced_df['allele'] == minor_allele]
+
+        def _get_ccf(allele_df, ccf_dict):
+            # if diploid there will be no events on the allele
+            if len(allele_df) == 0:
+                return 1.0
             else:
-                return self.phylogeny.ccfs[clusters[0]]
+                clusters = allele_df.cluster_num.unique()
+                # cluster 1 is clonal
+                subclonal_set = set(clusters) - set([1])
+                if len(subclonal_set) > 1:
+                    # if we have multiple subclonal clusters the ccf is undefined
+                    return np.nan
+                else:
+                    # otherwise our ccf is either 1 (clonal) or the ccf of the subclone
+                    if len(subclonal_set) == 0:
+                        return 1.0
+                    elif len(subclonal_set) == 1:
+                        return ccf_dict[list(subclonal_set)[0]]
+                    else:
+                        raise ValueError("undefined ccf")
+        
+        major_ccf = _get_ccf(major_df, self.phylogeny.ccfs)
+        minor_ccf = _get_ccf(minor_df, self.phylogeny.ccfs)    
+        return major_ccf, minor_ccf
      
     # generates seg file using poisson variance and beta noise for sigma
     def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity, do_parallel=True, return_avg_acov=False):
@@ -586,8 +622,10 @@ class CNV_Profile:
             return mean_allele_cov
 
     def add_ccf_annotations(self, input_segfile_df):
-        input_segfile_df['event_ccf'] = input_segfile_df.apply(lambda x: self.find_interval_ccf(str(int(x.Chromosome)),
+        ccfs = input_segfile_df.apply(lambda x: self.find_interval_ccfs(str(int(x.Chromosome)),
                                                                          x['Start.bp'], x['End.bp']), axis=1)
+        input_segfile_df.loc[:, ['major_ccf', 'minor_ccf']] = np.array([[c[0] for c in ccfs], [c[1] for c in ccfs]]).T
+
         return input_segfile_df
     
     def generate_phase_switching(self):
