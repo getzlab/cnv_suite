@@ -58,9 +58,9 @@ def acr_compare(file_1=None, file_2=None, fit_params=False):
         params = None
         optimal_lb, optimal_ub = 0,0
 
-    overlap_score, maj_ov, min_ov = get_MAD_interval(bins, lb, ub, params)
-    bins["major_overlap"] = maj_ov
-    bins["minor_overlap"] = min_ov
+    overlap_score, maj_ad, min_ad = get_MAD_interval(bins, lb, ub, params)
+    bins["major_AD"] = maj_ad
+    bins["minor_AD"] = min_ad
 
     if fit_params:
         bins["mu.major_1"] = bins.apply(lambda x: interval_remap(x["mu.major_1"], lb, ub, optimal_lb, optimal_ub), axis=1)
