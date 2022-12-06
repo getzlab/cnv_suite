@@ -500,7 +500,37 @@ class CNV_Profile:
         vcf_df.rename(columns={'CHROM': 'CONTIG', 'POS': 'POSITION',
                                 'ref_count': 'REF_COUNT', 'alt_count': 'ALT_COUNT'})[['CONTIG', 'POSITION',
                                                                                       'REF_COUNT', 'ALT_COUNT']].to_csv(filename, sep='\t', index=False)
-    
+   
+    # find ccf for a given interval
+    # ccf is only defined when a single lineage event is present at a loci, otherwise nan is returned
+    def find_interval_ccf(self, chrom, start, end):
+        interval_list = list(self.event_trees[chrom].paternal_tree[start:end]) + list(self.event_trees[chrom].maternal_tree[start:end])
+        def _intervals_to_df(int_list):
+            res = []
+            for interval in int_list:
+                res.append((interval.begin, interval.end, interval.data.type, interval.data.allele, interval.data.cluster_num, interval.data.cn_change))
+            res_df = pd.DataFrame(res, columns = ['start', 'end', 'type', 'allele', 'cluster_num', 'cn_change'])
+            return res_df
+
+        interval_df = _intervals_to_df(interval_list)
+
+        def _reduce_and_filter_int_df(df):
+            # init intervals don't matter
+            df = df.loc[df.type!='haploid']
+            df = df.groupby(['start', 'end', 'type', 'allele', 'cluster_num']).agg({'cn_change' : lambda x: x.sum()})
+            df = df.loc[df.cn_change !=0]
+            return df.reset_index()
+
+        reduced_df = _reduce_and_filter_int_df(interval_df)
+        if len(reduced_df) == 0:
+            return 1.0
+        else:
+            clusters = reduced_df.cluster_num.unique()
+            if len(clusters) > 1:
+                return np.nan
+            else:
+                return self.phylogeny.ccfs[clusters[0]]
+     
     # generates seg file using poisson variance and beta noise for sigma
     def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity, do_parallel=True, return_avg_acov=False):
         snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity, do_parallel = do_parallel)
@@ -533,6 +563,7 @@ class CNV_Profile:
         prof_df.loc[:, ['mu.major', 'mu.minor']] = np.nan
         prof_df.loc[:, ['A_count', 'B_count']] = 0
         prof_df.loc[:, ['sigma.major', 'sigma.minor']] = np.nan
+
         for i, row in tqdm.tqdm(prof_df.iterrows()):
             chrom, st, en, maj_ploidy, min_ploidy = row[:5]
             tot_ploidy = maj_ploidy + min_ploidy
@@ -548,14 +579,17 @@ class CNV_Profile:
             minor_mu, minor_sigma = minor_samples.mean(), minor_samples.std()
             prof_df.loc[i,['mu.major', 'sigma.major']] = major_mu, major_sigma
             prof_df.loc[i,['mu.minor', 'sigma.minor']] = minor_mu, minor_sigma
-
-        #prof_df[['Chromosome', 'Start.bp', 'End.bp', 'mu.major', 'mu.minor',
-        #         'sigma.major', 'sigma.minor']].to_csv(filename, sep='\t', index=False)
+        
         prof_df.to_csv(filename, sep='\t', index=False)
         
         if return_avg_acov:
             return mean_allele_cov
- 
+
+    def add_ccf_annotations(self, input_segfile_df):
+        input_segfile_df['event_ccf'] = input_segfile_df.apply(lambda x: self.find_interval_ccf(str(int(x.Chromosome)),
+                                                                         x['Start.bp'], x['End.bp']), axis=1)
+        return input_segfile_df
+    
     def generate_phase_switching(self):
         phase_switches = {}
         for chrom, size in self.csize.items():
