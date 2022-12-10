@@ -93,7 +93,7 @@ class CNV_Profile:
         return tree_dict
 
     def add_cnv_events(self, arm_num, focal_num, p_whole, ratio_clonal,
-                       median_focal_length=1.8 * 10**6,
+                       median_focal_length=1.8 * 10**6, p_arm_del=0.6, p_focal_del=0.6,
                        chromothripsis=False, wgd=False):
         """General helper to add CNV events according to criteria.
         
@@ -108,9 +108,9 @@ class CNV_Profile:
         :param wgd: boolean if clonal Whole Genome Doubling event is desired; default False"""
         # add clonal events
         for _ in np.arange(arm_num * ratio_clonal):
-            self.add_arm(1, p_whole)
+            self.add_arm(1, p_whole, p_deletion=p_arm_del)
         for _ in np.arange(focal_num * ratio_clonal):
-            self.add_focal(1, median_focal_length)
+            self.add_focal(1, median_focal_length, p_deletion=p_focal_del)
         if wgd:
             self.add_wgd(1)
         if chromothripsis:
@@ -119,9 +119,9 @@ class CNV_Profile:
         # add subclonal events
         for cluster in np.arange(2, self.phylogeny.num_subclones + 2):
             for _ in np.arange(arm_num * (1 - ratio_clonal) / self.phylogeny.num_subclones):
-                self.add_arm(cluster, p_whole)
+                self.add_arm(cluster, p_whole, p_deletion=p_arm_del)
             for _ in np.arange(focal_num * (1 - ratio_clonal) / self.phylogeny.num_subclones):
-                self.add_focal(cluster, median_focal_length)
+                self.add_focal(cluster, median_focal_length, p_deletion=p_focal_del)
 
     def add_arm(self, cluster_num, p_whole=0.5, p_q=0.5, chrom=None, p_deletion=0.6, allele=None):
         """Add an arm level copy number event to the profile given the specifications.
