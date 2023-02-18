@@ -92,7 +92,7 @@ class CNV_Profile:
 
         return tree_dict
 
-    def add_cnv_events(self, arm_num, focal_num, p_whole, ratio_clonal,
+    def add_cnv_events(self, arm_num, focal_num, micro_num, p_whole, ratio_clonal,
                        median_focal_length=1.8 * 10**6, p_arm_del=0.6, p_focal_del=0.6,
                        chromothripsis=False, wgd=False):
         """General helper to add CNV events according to criteria.
@@ -111,6 +111,10 @@ class CNV_Profile:
             self.add_arm(1, p_whole, p_deletion=p_arm_del)
         for _ in np.arange(focal_num * ratio_clonal):
             self.add_focal(1, median_focal_length, p_deletion=p_focal_del)
+        # add microfocal events
+        for _ in np.arange(micro_num / (self.phylogeny.num_subclones + 1)):
+            self.add_micro_focal(1, p_focal_del)
+            
         if wgd:
             self.add_wgd(1)
         if chromothripsis:
@@ -122,7 +126,9 @@ class CNV_Profile:
                 self.add_arm(cluster, p_whole, p_deletion=p_arm_del)
             for _ in np.arange(focal_num * (1 - ratio_clonal) / self.phylogeny.num_subclones):
                 self.add_focal(cluster, median_focal_length, p_deletion=p_focal_del)
-
+            for _ in np.arange(micro_num / (self.phylogeny.num_subclones / (self.phylogeny.num_subclones + 1))):
+                self.add_micro_focal(cluster, p_focal_del)
+ 
     def add_arm(self, cluster_num, p_whole=0.5, p_q=0.5, chrom=None, p_deletion=0.6, allele=None):
         """Add an arm level copy number event to the profile given the specifications.
 
@@ -172,7 +178,7 @@ class CNV_Profile:
                     self.event_trees[chrom].add_seg_interval('arm', cluster_num, level, i)
         else:
             for i in desired_int:
-                self.event_trees[chrom].add_seg_interval('arm', cluster_num, i.data.cn_change, i)
+                self.event_trees[chrom].add_seg_interval('arm', cluster_num, min(i.data.cn_change, 3), i)
 
     def add_focal(self, cluster_num, median_focal_length=1.8 * 10**6, cnv_lambda=0.8, chrom=None,
                   p_deletion=0.5, allele=None, position=None, cnv_level=None):
@@ -216,7 +222,14 @@ class CNV_Profile:
                 self.event_trees[chrom].add_seg_interval('focal', cluster_num, chosen_amp, i)
         
         return start_pos, end_pos
-
+    
+    def add_micro_focal(self, cluster_num, p_deletion):
+        chrom = np.random.choice(list(self.csize.keys()))
+        focal_length = np.floor(np.random.rand() * 1.3e5 + 2e4).astype(int)
+        start_pos = np.random.randint(1, max(2, self.csize[chrom] - focal_length))
+        end_pos = start_pos + focal_length
+        self.add_focal(cluster_num, chrom=chrom, position=(start_pos, end_pos), p_deletion=p_deletion)
+        
     def add_wgd(self, cluster_num, both_alleles=True):
         """Add whole genome doubling for the specified cluster.
 
