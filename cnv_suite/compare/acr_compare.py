@@ -43,11 +43,10 @@ def acr_compare(file_1=None, file_2=None, fit_params=False):
     lb = shared_bins['mu.minor_1'].min()
     ub = shared_bins['mu.major_1'].max()
     if fit_params:
-        # pick good starting point for new interval bounds
-        lb_guess = shared_bins['mu.minor_2'].min()
+        # pick good starting point for optimiztion using grid search
         ub_guess = shared_bins['mu.major_2'].max()
-
-        minimization_result = minimize(MAD_int_helper, x0=np.array([lb_guess, ub_guess]),
+        x0_grid = MAD_grid_search(bins, lb, ub, ub_guess)
+        minimization_result = minimize(MAD_int_helper, x0=x0_grid,
                                    args=(bins, lb, ub), method='Powell',
                                    options={'xtol': 0.0001, 'ftol': 0.0001})
     
@@ -73,6 +72,27 @@ def acr_compare(file_1=None, file_2=None, fit_params=False):
     overlap_length = int(bins['length_overlap'].sum())
 
     return overlap_score, optimal_lb, optimal_ub, non_overlap_length, overlap_length, bins
+
+def MAD_grid_search(bins, lb, ub, ub_guess):
+    """
+    Preform crude gridsaerch to find good starting point for optmization
+    optimizer is very sensitive to starting point
+    """
+    print("performing grid search to find good starting values for optimizer...")
+    print("WARNING: grid search range only valid for benchmarking samples")
+
+    low_grid = np.r_[-250:500:10]
+    high_grid = np.r_[0:2 * ub_guess:10]
+    grid_res = np.ones((len(low_grid), len(high_grid))) * np.inf
+    
+    for i, l in enumerate(low_grid):
+        for j, h in enumerate(high_grid):
+            if l < h:
+                score, _, _ = get_MAD_interval(bins, lb, ub, params=np.array([l, h]))
+                grid_res[i,j]= score
+
+    opt_ind = np.where(grid_res == grid_res.min())
+    return np.r_[low_grid[opt_ind[0][0]], high_grid[opt_ind[1][0]]]
 
 def MAD_int_helper(params, bins, lb, ub):
     """
