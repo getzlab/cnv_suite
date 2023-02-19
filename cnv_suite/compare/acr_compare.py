@@ -42,6 +42,13 @@ def acr_compare(file_1=None, file_2=None, fit_params=False):
     shared_bins = bins.loc[~bins.unique]
     lb = shared_bins['mu.minor_1'].min()
     ub = shared_bins['mu.major_1'].max()
+    
+    if ub==lb:
+        # all the segments are predicted to be be diploid. artificially set a unit
+        # interval to avoid divide by zero
+        ub = ub + 0.5
+        lb = lb - 0.5
+
     if fit_params:
         # pick good starting point for optimiztion using grid search
         ub_guess = shared_bins['mu.major_2'].max()
