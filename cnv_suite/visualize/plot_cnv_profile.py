@@ -109,8 +109,8 @@ def plot_acr_subplots(fig_list, title, fig_names, csize, height_per_sample=350, 
         fig.add_traces(sub_figure.data, rows=i + 1, cols=1)
         fig.update_yaxes(fig_list[i].layout.yaxis, row=i+1, col=1)
 
-    # Add chromosome background back in
-    add_background(fig, csize.keys(), csize)
+        # Add chromosome background back in
+        add_background(fig, csize.keys(), csize, plotly_row=i+1, plotly_col=1)
 
     # update height based on subplot number
     fig.update_layout(height=len(fig_list)*height_per_sample + 50,
