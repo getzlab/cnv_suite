@@ -131,7 +131,7 @@ def calc_avg_cn(seg_df,
     # remove sex chromosomes
     df = seg_df[~(seg_df[chr_col].isin(['X', 'Y', '23', '24', 23, 24]))].copy()
     if remove_null:  # remove null allelic segments
-        df = df[~(seg_df[allele_col].isnull())].copy()
+        df = df[~(df[allele_col].isnull())].copy()
     avg_acr = (df[total_cn_col] * df[len_col]).sum() / (2 * df[len_col].sum())
 
     return avg_acr
