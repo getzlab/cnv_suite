@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from simulate.cnv_profile import CNV_Profile, simulate_coverage_and_depth
 from utils import PathLike
+from utils.simulation_utils import dump_tsv
 
 
 BASE_PATH = Path(__file__).parent
@@ -79,7 +80,7 @@ def make_read_bed(out_path: PathLike, snv_vcf: PathLike, mean_reads: float):
     res.to_csv(out_path, sep="\t", index=False)
 
 
-def simulate_genome() -> CNV_Profile:
+def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
     # cband = pd.read_csv(CYTOBAND_PATH, sep="\t", names=["chr", "start", "end", "band", "stain"])
     centromere_df = parse_cytoband(CYTOBAND_PATH)
     centromere_df.loc[centromere_df[centromere_df["start"] == 0].index, "arm"] = "p"
@@ -95,13 +96,9 @@ def simulate_genome() -> CNV_Profile:
     centromere_avg_center = centromere_spec_df.to_dict()["avg"]
     # centromere_span_center = centromere_spec_df.to_dict()["list"]
 
-    default_profile = CNV_Profile(
-        num_subclones=3, csize=DATA_PATH / "NA12878_csizes.tsv", cent_loc=centromere_avg_center
-    )
-    default_profile.add_cnv_events(
-        arm_num=20, focal_num=600, p_whole=0.6, ratio_clonal=0.5, median_focal_length=1.8 * 10**6
-    )
-    default_profile.add_arm(2, 1, chrom="1")
+    default_profile = CNV_Profile(num_subclones, csize=DATA_PATH / "NA12878_csizes.tsv", cent_loc=centromere_avg_center)
+
+    default_profile.add_cnv_events(**kwargs)
     default_profile._calculate_cnv_profile()
     default_profile._calculate_df_profiles()
 
@@ -121,23 +118,32 @@ def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    # print(os.getcwd())
-    # make_read_depth(DATA_PATH / "NA12878.vcf", 50).to_csv(OUT_PATH / "read_depth.tsv", sep="\t", index=False)
+    # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), OUT_PATH / "read_depth.tsv")
 
-    prof = simulate_genome()
-    prof.to_pickle(OUT_PATH / "sim_genome.pickle")
-    prof.generate_random_mutation_file(1e-6, 25).to_csv(OUT_PATH / "sim_mutation_plan.tsv", sep="\t", index=False)
-    prof.generate_mutations(OUT_PATH / "sim_mutation_plan.tsv").to_csv(
-        OUT_PATH / "sim_mutations.tsv", index=False, sep="\t"
+    name = "sim"
+    purity = 0.7
+
+    prof = simulate_genome(
+        num_subclones=3, arm_num=20, focal_num=600, p_whole=0.6, ratio_clonal=0.5, median_focal_length=1.8 * 10**6
     )
 
+    prof.to_pickle(OUT_PATH / f"{name}_profile.pickle")
+
+    dump_tsv(prof.generate_random_mutation_file(1e-6, 25), OUT_PATH / f"{name}_mutation_plan.tsv")
+    dump_tsv(
+        prof.generate_mutations(OUT_PATH / f"{name}_mutation_plan.tsv", purity), OUT_PATH / f"{name}_mutations.tsv"
+    )
+    (OUT_PATH / f"{name}_mutation_plan.tsv").unlink()
+
     simulate_coverage_and_depth(
-        (OUT_PATH / "sim_genome.pickle").open("rb"),
+        (OUT_PATH / f"{name}_profile.pickle").open("rb"),
         DATA_PATH / "NA12878_platinum_realigned_covcollect.bed",
         DATA_PATH / "NA12878.vcf",
         OUT_PATH / "read_depth.tsv",
-        0.7,
-        OUT_PATH / "sim_coverage.vcf",
-        OUT_PATH / "sim_output_hets.vcf",
+        purity,
+        OUT_PATH / f"{name}_coverage.vcf",
+        OUT_PATH / f"{name}_output_hets.vcf",
         do_parallel=False,
     )
+
+    print("Finished!")

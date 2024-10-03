@@ -3,6 +3,8 @@ from typing import Any, Dict, overload
 import numpy as np
 import pandas as pd
 
+from utils import PathLike
+
 
 def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase):
     """Returns number of alternate reads generated from a binomial.
@@ -97,3 +99,10 @@ def switch_contigs(input_data: pd.DataFrame | Dict[str, Any]):
         return input_data
     else:
         raise ValueError(f"Only dictionaries and pandas DataFrames supported. Not {type(input_data)}.")
+
+
+def dump_tsv(df: pd.DataFrame, path: PathLike, header=True):
+    """
+    Dumps the given dataframe as a TSV file.
+    """
+    df.to_csv(path, sep="\t", index=False, header=header)

@@ -94,7 +94,6 @@ class CNV_Profile:
                 else:
                     columns = ["chr", "len"]
                 csize_df = pd.read_csv(csize, sep="\t", header=None, names=columns)
-                print(f"CSIZE DF {csize_df}")
             elif isinstance(csize, pd.DataFrame):
                 csize_df = csize.copy()
             else:
@@ -535,7 +534,7 @@ class CNV_Profile:
         )
         assert isinstance(cov_df, pd.DataFrame), "Failed to generate coverage!"
         cov_df = cov_df.rename(columns={"chrom": "chr"})
-        cov_df.to_csv(filename, sep="\t", index=False)
+        cov_df.to_csv(filename, sep="\t", index=False, header=False)
 
     def generate_snvs(self, snv_vcf: PathLike, read_depths: PathLike, purity: float, ref_alt=False, do_parallel=True):
         """Generate SNV read depths adjusted for CNV profile (and purity), with phasing from vcf file.
@@ -612,14 +611,14 @@ class CNV_Profile:
             purity,
         )
 
-        snv_df["maternal_prop"] = (snv_df["maternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values
+        snv_df["maternal_prop"] = (snv_df["maternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values  # type: ignore
 
-        snv_df["paternal_prop"] = (snv_df["paternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values
+        snv_df["paternal_prop"] = (snv_df["paternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values  # type: ignore
 
         snv_df["maternal_present"] = snv_df["test"].apply(lambda x: x[0] == "1")
         snv_df["paternal_present"] = snv_df["test"].apply(lambda x: x[2] == "1")
 
-        snv_df["adjusted_depth"] = np.floor(snv_df["DEPTH"].values * snv_df["ploidy"].values / 2).astype(int)
+        snv_df["adjusted_depth"] = np.floor(snv_df["DEPTH"].values * snv_df["ploidy"].values / 2).astype(int)  # type: ignore
 
         # generate phase switch profile
         # chromosome interval trees: False if phase switched
@@ -637,7 +636,7 @@ class CNV_Profile:
                     correct_phase_interval_trees[x["CHROM"]][x["POS"]].pop().data,
                 ),
                 axis=1,
-            )
+            )  # type: ignore
         else:
             snv_df["alt_count"] = snv_df.apply(
                 lambda x: get_alt_count(
@@ -670,7 +669,7 @@ class CNV_Profile:
 
         return pd.DataFrame(res, columns=["chr", "pos", "depth"])
 
-    def generate_mutations(self, mut_file: PathLike) -> pd.DataFrame:
+    def generate_mutations(self, mut_file: PathLike, purity: float) -> pd.DataFrame:
         """
         Generates the mutations.
         The mutations are randomly distributed along the chromosomes with the given density.
@@ -756,9 +755,15 @@ class CNV_Profile:
                 affected[n] = a
                 assert p == ploidity[n]
 
+            # Taking the purity into account
+            total = purity * total + (1 - purity) * 2
+            partial = purity * partial
             p = partial / total
+
             reads = np.random.poisson(p * depth * total)
             nonreads = np.random.poisson((1 - p + 1e-6) * depth * total)
+            if reads <= 3:
+                continue
             res.append([chr, pos, nonreads, reads, "KEEP"])
 
         return pd.DataFrame(res, columns=["contig", "position", "t_ref_count", "t_alt_count", "judgement"])
@@ -787,6 +792,9 @@ class CNV_Profile:
     def generate_profile_seg_file(self, filename, vcf, het_depth_bed, og_coverage_bed, purity):
         snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity)
         assert snv_df is not None, "Failed to generate SNV file!"
+        assert (
+            self.cnv_profile_df is not None
+        ), "Attempted to generate the profile seg file before generating the profile!"
         # get allele counts from snv_df
         A_alt_mask = snv_df.NA12878.apply(lambda x: int(x[0]) == 1)
         snv_df.loc[:, "A_count"] = 0
@@ -830,14 +838,14 @@ class CNV_Profile:
                 (phased_counts.CHROM == chrom) & (phased_counts.POS >= st) & (phased_counts.POS < en),
                 ["A_count", "B_count"],
             ].sum()
-            prof_df.loc[i, ["A_count", "B_count"]] = A, B
+            prof_df.loc[i, ["A_count", "B_count"]] = A, B  # type: ignore
             if (A + B) == 0:
                 continue
             A, B = (A, B) if A > B else (B, A)
             purity_corrected_cov = (mean_allele_cov * tot_ploidy * purity) + (mean_allele_cov * (1 - purity) * 2)
-            major_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(A, B, size=10000))
+            major_samples: pd.DataFrame = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(A, B, size=10000))  # type: ignore
             major_mu, major_sigma = major_samples.mean(), major_samples.std()
-            minor_samples = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(B, A, size=10000))
+            minor_samples: pd.DataFrame = s.poisson.rvs(purity_corrected_cov * s.beta.rvs(B, A, size=10000))  # type: ignore
             minor_mu, minor_sigma = minor_samples.mean(), minor_samples.std()
             prof_df.at[i, ["mu.major", "sigma.major"]] = major_mu, major_sigma
             prof_df.at[i, ["mu.minor", "sigma.minor"]] = minor_mu, minor_sigma
@@ -1055,7 +1063,7 @@ class Phylogeny:
         A parent node is guaranteed to be iterated over after all the nodes in the subtree rooted by it."""
         # Topologically sorting the nodes.
         rem_children: Dict[int | None, int] = {node: 0 for node in self.parents}
-        rem_children[None] = self.num_subclones + 1
+        rem_children[None] = self.num_subclones + 1_000_000
 
         for parent in self.parents.values():
             if parent is not None:
@@ -1078,7 +1086,7 @@ class Phylogeny:
         A parent node is guaranteed to be iterated over before any node in the subtree rooted by it."""
         # Topologically sorting the nodes.
         rem_children: Dict[int | None, int] = {node: 0 for node in self.parents}
-        rem_children[None] = self.num_subclones + 1
+        rem_children[None] = self.num_subclones + 1_000_000
 
         for parent in self.parents.values():
             if parent is not None:
