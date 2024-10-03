@@ -32,9 +32,9 @@ def single_allele_ploidy(allele, start, end):
     """Get the ploidy for this allele tree over this interval [start, end)."""
     intervals = allele.envelop(start, end) | allele[start] | allele[end - 1]
     if len(intervals) == 1:
-        return intervals.pop().data[3]
+        return intervals.pop().data.cn_change
     else:
-        interval_totals = [(min(i.end, end) - max(i.begin, start)) * i.data[3] for i in intervals]
+        interval_totals = [(min(i.end, end) - max(i.begin, start)) * i.data.cn_change for i in intervals]
         return sum(interval_totals) / (end - start)
 
 

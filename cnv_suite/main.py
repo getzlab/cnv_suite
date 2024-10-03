@@ -1,7 +1,4 @@
-import os
 from pathlib import Path
-import pickle
-import sys
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -88,7 +85,7 @@ def simulate_genome() -> CNV_Profile:
     centromere_df.loc[centromere_df[centromere_df["start"] == 0].index, "arm"] = "p"
     centromere_df.loc[centromere_df[centromere_df["start"] != 0].index, "arm"] = "q"
 
-    centromere_spec_df = centromere_df.set_index(["chr", "arm"]).unstack()[[("start", "q"), ("end", "p")]]
+    centromere_spec_df = centromere_df.set_index(["chr", "arm"]).unstack()[[("start", "q"), ("end", "p")]]  # type: ignore
     centromere_spec_df["avg"] = centromere_spec_df.mean(axis=1).astype(int)
     centromere_spec_df["list"] = centromere_spec_df.apply(
         lambda x: [int(x[("end", "p")]), int(x[("start", "q")])], axis=1
@@ -128,10 +125,14 @@ if __name__ == "__main__":
     # make_read_depth(DATA_PATH / "NA12878.vcf", 50).to_csv(OUT_PATH / "read_depth.tsv", sep="\t", index=False)
 
     prof = simulate_genome()
-    prof.to_pickle(OUT_PATH / "genome.pickle")
+    prof.to_pickle(OUT_PATH / "sim_genome.pickle")
+    prof.generate_random_mutation_file(1e-6, 25).to_csv(OUT_PATH / "sim_mutation_plan.tsv", sep="\t", index=False)
+    prof.generate_mutations(OUT_PATH / "sim_mutation_plan.tsv").to_csv(
+        OUT_PATH / "sim_mutations.tsv", index=False, sep="\t"
+    )
 
     simulate_coverage_and_depth(
-        (OUT_PATH / "genome.pickle").open("rb"),
+        (OUT_PATH / "sim_genome.pickle").open("rb"),
         DATA_PATH / "NA12878_platinum_realigned_covcollect.bed",
         DATA_PATH / "NA12878.vcf",
         OUT_PATH / "read_depth.tsv",
