@@ -23,14 +23,18 @@ from utils.simulation_utils import (
     get_contigs_from_header,
     get_average_ploidy,
     single_allele_ploidy,
+    Haplotype,
 )
+
+MATERNAL = Haplotype.MATERNAL
+PATERNAL = Haplotype.PATERNAL
 
 
 @dataclass
 class Event:
     type: str
     """The type of the CNA event, such as 'focal' or 'arm'."""
-    allele: str
+    allele: Haplotype
     """The paternal or maternal allele."""
     cluster_num: int
     """The subclone in which the event had happened."""
@@ -132,8 +136,8 @@ class CNV_Profile:
         tree_dict = {}
         for chrom, size in chromosome_size.items():
             tree = Chromosome(chrom, size)
-            tree.add_seg("haploid", "maternal", 0, 1, 1, size)
-            tree.add_seg("haploid", "paternal", 0, 1, 1, size)
+            tree.add_seg("haploid", MATERNAL, 0, 1, 1, size)
+            tree.add_seg("haploid", PATERNAL, 0, 1, 1, size)
             tree_dict[chrom] = tree
 
         return tree_dict
@@ -194,12 +198,12 @@ class CNV_Profile:
 
         # choose maternal vs. paternal
         if not allele:
-            allele = "paternal" if np.random.rand() > 0.5 else "maternal"
+            allele = PATERNAL if np.random.rand() > 0.5 else MATERNAL
 
         # choose level (based on current CN and cluster number)
         pat_int, mat_int = self.calculate_cnv_lineage(chrom, start, end, cluster_num)
-        desired_int = pat_int if allele == "paternal" else mat_int
-        other_int = pat_int if allele == "maternal" else mat_int
+        desired_int = pat_int if allele == PATERNAL else mat_int
+        other_int = pat_int if allele == MATERNAL else mat_int
 
         # if deletion:
         # - only delete so that current intervals + deletion >= -1
@@ -256,11 +260,11 @@ class CNV_Profile:
 
         # choose maternal vs. paternal
         if not allele:
-            allele = "paternal" if np.random.rand() > 0.5 else "maternal"
+            allele = PATERNAL if np.random.rand() > 0.5 else MATERNAL
 
         # get current CN intervals for this branch of phylogenetic tree
         pat_int, mat_int = self.calculate_cnv_lineage(chrom, start_pos, end_pos, cluster_num)
-        desired_int = pat_int if allele == "paternal" else mat_int
+        desired_int = pat_int if allele == PATERNAL else mat_int
 
         if np.random.rand() < p_deletion:
             # lean towards fully deleting intervals (if there is already an amplification)
@@ -284,7 +288,7 @@ class CNV_Profile:
 
         :return: None
         """
-        alleles = ["paternal", "maternal"]
+        alleles = [PATERNAL, MATERNAL]
         shuffle(alleles)
         for chrom in self.chromosomes.keys():
             # apply whole arm amplification to each chromosome
@@ -299,7 +303,7 @@ class CNV_Profile:
         if not chrom:
             chrom = choice(list(self.chromosomes.keys()))
         if not allele:  # assuming all events happen on single chromatid (allele)
-            allele = "paternal" if np.random.rand() > 0.5 else "maternal"
+            allele = PATERNAL if np.random.rand() > 0.5 else MATERNAL
 
         # get number of events
         if not num_events:
@@ -348,7 +352,7 @@ class CNV_Profile:
 
         Call add_arm (default) or add_focal (if focal attribute is set to True) twice, once for each allele.
         """
-        alleles = ["paternal", "maternal"]
+        alleles = [PATERNAL, MATERNAL]
         shuffle(alleles)
 
         if not chrom:
@@ -908,8 +912,8 @@ class Chromosome:
         # IntervalTree representing the copy number state of the maternal allele
         self.maternal_tree = IntervalTree()
 
-    def add_seg(self, type: str, allele: str, cluster_num: int, cn_change: int, start: int, end: int):
-        if allele == "paternal":
+    def add_seg(self, type: str, allele: Haplotype, cluster_num: int, cn_change: int, start: int, end: int):
+        if allele == PATERNAL:
             self.paternal_tree[start:end] = Event(type, allele, cluster_num, cn_change)
         else:
             self.maternal_tree[start:end] = Event(type, allele, cluster_num, cn_change)
@@ -985,9 +989,9 @@ class Chromosome:
         both_alleles.merge_overlaps(data_reducer=self.specify_phasing)
         seg_df = []
         for segment in both_alleles:
-            seg_df.append([self.name, segment.begin, segment.end, segment.data["paternal"], segment.data["maternal"]])
+            seg_df.append([self.name, segment.begin, segment.end, segment.data[PATERNAL], segment.data[MATERNAL]])
 
-        return pd.DataFrame(seg_df, columns=["Chromosome", "Start.bp", "End.bp", "paternal", "maternal"])
+        return pd.DataFrame(seg_df, columns=["Chromosome", "Start.bp", "End.bp", PATERNAL, MATERNAL])
 
     @staticmethod
     def sum_levels(old: Event, new: Event) -> Event:
@@ -999,11 +1003,11 @@ class Chromosome:
         return {"major": max(old.cn_change, new.cn_change), "minor": min(old.cn_change, new.cn_change)}
 
     @staticmethod
-    def specify_phasing(old, new):
+    def specify_phasing(old, new) -> Dict[Haplotype, int]:
         """Returns a dictionary containing the CNA of the maternal and paternal chromosome numbers individually."""
         return {
-            "paternal": old.cn_change if old.allele == "paternal" else new.cn_change,
-            "maternal": old.cn_change if old.allele == "maternal" else new.cn_change,
+            PATERNAL: old.cn_change if old.allele == PATERNAL else new.cn_change,
+            MATERNAL: old.cn_change if old.allele == MATERNAL else new.cn_change,
         }
 
 

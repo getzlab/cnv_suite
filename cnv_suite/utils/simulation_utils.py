@@ -1,9 +1,15 @@
+import enum
 import re
 from typing import Any, Dict, overload
 import numpy as np
 import pandas as pd
 
 from utils import PathLike
+
+
+class Haplotype(enum.Enum):
+    MATERNAL = enum.auto()
+    PATERNAL = enum.auto()
 
 
 def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase):
