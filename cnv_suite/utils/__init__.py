@@ -15,3 +15,15 @@ from .cnv_helper_methods import (
 
 
 from .simulation_utils import switch_contigs
+
+_UNIQUE_ID = 0
+
+
+def gen_id() -> int:
+    """
+    Generates a unique ID for an object that is guaranteed to be different from all other unique IDs.
+    IDs are created in ascending order.
+    """
+    global _UNIQUE_ID
+    _UNIQUE_ID += 1
+    return _UNIQUE_ID

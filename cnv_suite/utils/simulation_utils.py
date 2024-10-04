@@ -11,6 +11,16 @@ class Haplotype(enum.Enum):
     MATERNAL = enum.auto()
     PATERNAL = enum.auto()
 
+    def other(self) -> "Haplotype":
+        """
+        Returns the other haplotype.
+        """
+        match self:
+            case Haplotype.PATERNAL:
+                return Haplotype.MATERNAL
+            case Haplotype.MATERNAL:
+                return Haplotype.PATERNAL
+
 
 def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase):
     """Returns number of alternate reads generated from a binomial.

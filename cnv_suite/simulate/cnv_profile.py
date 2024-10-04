@@ -236,10 +236,10 @@ class CNV_Profile:
         cluster_num: int,
         median_focal_length=1.8 * 10**6,
         cnv_lambda=0.8,
-        chrom=None,
+        chrom: Optional[str] = None,
         p_deletion=0.5,
-        allele=None,
-        position=None,
+        allele: Optional[Haplotype] = None,
+        position: Optional[Tuple[int, int]] = None,
         cnv_level=None,
     ):
         """Add a focal copy number event to the profile, according to the specifications.
@@ -284,10 +284,7 @@ class CNV_Profile:
         return start_pos, end_pos
 
     def add_wgd(self, cluster_num: int, both_alleles=True):
-        """Add whole genome doubling for the specified cluster.
-
-        :return: None
-        """
+        """Add whole genome doubling for the specified cluster."""
         alleles = [PATERNAL, MATERNAL]
         shuffle(alleles)
         for chrom in self.chromosomes.keys():
@@ -434,9 +431,10 @@ class CNV_Profile:
         - pandarallel natively uses /dev/shm for message passing and it is recommended to
           do use a single core on dockerized and memory-constrained systems
         """
-        if self.cnv_trees is None:
-            print("cnv_trees not computed yet. Run calculate_profiles() before generating coverage.")
-            return None
+        assert (
+            self.cnv_trees is not None
+        ), "cnv_trees not computed yet. Run calculate_profiles() before generating coverage."
+
         x_coverage_df = pd.read_csv(
             cov_binned,
             sep="\t",
@@ -922,7 +920,13 @@ class Chromosome:
         """Add segment to one of the alleles with given cluster, copy number change and interval"""
         self.add_seg(type, interval.data.allele, cluster_num, cn_change, interval.begin, interval.end)
 
-    def calc_current_cnv_lineage(self, start: int, end: int, cluster_num: int, phylogeny: "Phylogeny"):
+    def calc_current_cnv_lineage(
+        self, start: int, end: int, cluster_num: int, phylogeny: "Phylogeny"
+    ) -> Tuple[IntervalTree, IntervalTree]:
+        """
+        Computes a tree specifying the total ploidity at each point in the chromosome between `start` and `end`
+        at the tumor subclone specified by `cluster_num`.
+        """
         lineage_clusters = phylogeny.get_lineage(cluster_num)
 
         pat_intervals = self.paternal_tree.copy()
@@ -973,7 +977,11 @@ class Chromosome:
         # could deliver a Chromosome (or child class) instead of just a tree
         return pat_tree, mat_tree
 
-    def get_cnv_df(self, pat_tree, mat_tree):
+    def get_cnv_df(self, pat_tree: IntervalTree, mat_tree: IntervalTree) -> pd.DataFrame:
+        """
+        Makes a dataframe specifying for each segment its major chromosome ploidity and its minor chromosome ploidity.
+        This must be called in trees in which each segment is disjoint, ideally those created by `calc_full_cnv`.
+        """
         both_alleles = IntervalTree(list(pat_tree) + list(mat_tree))
         both_alleles.split_overlaps()
         both_alleles.merge_overlaps(data_reducer=self.specify_levels)
@@ -983,7 +991,7 @@ class Chromosome:
 
         return pd.DataFrame(seg_df, columns=["Chromosome", "Start.bp", "End.bp", "mu.major", "mu.minor"])
 
-    def get_phased_df(self, pat_tree, mat_tree):
+    def get_phased_df(self, pat_tree: IntervalTree, mat_tree: IntervalTree) -> pd.DataFrame:
         both_alleles = IntervalTree(list(pat_tree) + list(mat_tree))
         both_alleles.split_overlaps()
         both_alleles.merge_overlaps(data_reducer=self.specify_phasing)

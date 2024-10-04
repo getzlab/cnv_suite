@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 
+import simulate
 from simulate.cnv_profile import CNV_Profile, simulate_coverage_and_depth
 from utils import PathLike
 from utils.simulation_utils import dump_tsv
@@ -120,30 +121,32 @@ def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
 if __name__ == "__main__":
     # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), OUT_PATH / "read_depth.tsv")
 
-    name = "sim"
-    purity = 0.7
+    simulate.chromosome.main()
 
-    prof = simulate_genome(
-        num_subclones=3, arm_num=20, focal_num=600, p_whole=0.6, ratio_clonal=0.5, median_focal_length=1.8 * 10**6
-    )
+    # name = "sim"
+    # purity = 0.7
 
-    prof.to_pickle(OUT_PATH / f"{name}_profile.pickle")
+    # prof = simulate_genome(
+    #     num_subclones=3, arm_num=20, focal_num=600, p_whole=0.6, ratio_clonal=0.5, median_focal_length=1.8 * 10**6
+    # )
 
-    dump_tsv(prof.generate_random_mutation_file(1e-6, 25), OUT_PATH / f"{name}_mutation_plan.tsv")
-    dump_tsv(
-        prof.generate_mutations(OUT_PATH / f"{name}_mutation_plan.tsv", purity), OUT_PATH / f"{name}_mutations.tsv"
-    )
-    (OUT_PATH / f"{name}_mutation_plan.tsv").unlink()
+    # prof.to_pickle(OUT_PATH / f"{name}_profile.pickle")
 
-    simulate_coverage_and_depth(
-        (OUT_PATH / f"{name}_profile.pickle").open("rb"),
-        DATA_PATH / "NA12878_platinum_realigned_covcollect.bed",
-        DATA_PATH / "NA12878.vcf",
-        OUT_PATH / "read_depth.tsv",
-        purity,
-        OUT_PATH / f"{name}_coverage.vcf",
-        OUT_PATH / f"{name}_output_hets.vcf",
-        do_parallel=False,
-    )
+    # dump_tsv(prof.generate_random_mutation_file(1e-6, 25), OUT_PATH / f"{name}_mutation_plan.tsv")
+    # dump_tsv(
+    #     prof.generate_mutations(OUT_PATH / f"{name}_mutation_plan.tsv", purity), OUT_PATH / f"{name}_mutations.tsv"
+    # )
+    # (OUT_PATH / f"{name}_mutation_plan.tsv").unlink()
 
-    print("Finished!")
+    # simulate_coverage_and_depth(
+    #     (OUT_PATH / f"{name}_profile.pickle").open("rb"),
+    #     DATA_PATH / "NA12878_platinum_realigned_covcollect.bed",
+    #     DATA_PATH / "NA12878.vcf",
+    #     OUT_PATH / "read_depth.tsv",
+    #     purity,
+    #     OUT_PATH / f"{name}_coverage.vcf",
+    #     OUT_PATH / f"{name}_output_hets.vcf",
+    #     do_parallel=False,
+    # )
+
+    # print("Finished!")
