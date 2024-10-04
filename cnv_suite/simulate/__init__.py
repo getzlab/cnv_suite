@@ -1,2 +1,2 @@
 from .cnv_profile import CNV_Profile
-import simulate.chromosome
+import simulate.full_dna_sim

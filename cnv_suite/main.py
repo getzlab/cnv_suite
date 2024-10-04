@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 import simulate
 from simulate.cnv_profile import CNV_Profile, simulate_coverage_and_depth
+import simulate.full_dna_sim
 from utils import PathLike
 from utils.simulation_utils import dump_tsv
 
@@ -121,7 +122,7 @@ def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
 if __name__ == "__main__":
     # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), OUT_PATH / "read_depth.tsv")
 
-    simulate.chromosome.main()
+    simulate.full_dna_sim.main()
 
     # name = "sim"
     # purity = 0.7

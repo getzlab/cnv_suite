@@ -49,6 +49,7 @@ class CNV_Profile:
     chromosome_size: Dict[str, int]
 
     chromosomes: "Dict[str, Chromosome]"
+    mutation_bands: "Dict[str, IntervalTree]"
     phylogeny: "Phylogeny"
     cnv_trees: "Optional[Dict[str, Tuple[IntervalTree, IntervalTree]]]"
     cnv_profile_df: Optional[pd.DataFrame]
@@ -126,6 +127,7 @@ class CNV_Profile:
         self.cnv_trees = None
         self.cnv_profile_df = None
         self.phased_profile_df = None
+        self.mutation_bands = {}
 
     def _init_all_chrom(self, chromosome_size: Dict[str, int]) -> "Dict[str, Chromosome]":
         """
@@ -686,81 +688,21 @@ class CNV_Profile:
 
         res = []
 
+        total_ploidities = {chr_name: chr.calc_full_cnv(self.phylogeny) for chr_name, chr in self.chromosomes.items()}
+
         for _, row in mut_df.iterrows():
             chr = row["chr"]
             pos = row["pos"]
             depth = row["depth"]
-            # TODO: Maybe I should sample the subclone only after computing the local CCFs?
-            sc = self.phylogeny.sample_subclone()
-            is_maternal = random.random() < 0.5
 
-            m_events: list[Event] = [interval.data for interval in self.chromosomes[chr].maternal_tree[pos]]
-            p_events: list[Event] = [interval.data for interval in self.chromosomes[chr].paternal_tree[pos]]
-            total = sum(e.cn_change * self.phylogeny.ccfs[e.cluster_num] for e in m_events) + sum(
-                e.cn_change * self.phylogeny.ccfs[e.cluster_num] for e in p_events
-            )
+            pat, mat = total_ploidities[chr]
+            assert len(pat[pos]) == len(mat[pos]) == 1
+            total = next(iter(pat[pos])).data[0] + next(iter(mat[pos])).data[0]
 
-            # If all chromosomal segments in the area were lost, we don't see any mutation.
-            if total == 0:
-                continue
+            bands, weights = self.mutation_bands[chr][pos]
+            band = np.random.choice(bands, weights)
 
-            raw_mut_events = m_events if is_maternal else p_events
-            mut_events: defaultdict[int, list[Event]] = defaultdict(list)
-            for e in raw_mut_events:
-                mut_events[e.cluster_num].append(e)
-
-            # TODO:
-            # I want the events to be first amplification and only then deletion, to make things consistent.
-            # Another thing: The mutations I make here are noisy, and subclonal amplification+mutations might just end up a smear.
-            # I should track the exact chromosomal indices affected by each event to make things accurate.
-            for v in mut_events.values():
-                v.sort(key=lambda e: e.cn_change, reverse=True)
-
-            # Computing the ploidity of the mutated chromosomes in each node.
-            ploidity = {}
-
-            for n in self.phylogeny.pre_order_iter():
-                p = ploidity.get(self.phylogeny.parents[n], 0)
-                for e in mut_events[n]:
-                    p += e.cn_change
-                ploidity[n] = p
-            # If there are no chromosomes in the subclone to mutate, we continue.
-            if ploidity[sc] == 0:
-                continue
-
-            affected = {n: 0 for n in ploidity}
-            affected[sc] = 1
-
-            partial = self.phylogeny.ccfs[sc]
-
-            for n in self.phylogeny.pre_order_iter():
-                parent = self.phylogeny.parents[n]
-                if parent is None:
-                    continue
-                p = ploidity[parent]
-                a = affected[parent]
-                if a == 0:
-                    continue
-                for e in mut_events[n]:
-                    if e.cn_change == 0:
-                        continue
-                    assert p + e.cn_change >= 0
-                    abs_change = abs(e.cn_change)
-                    sign = int(e.cn_change / abs_change)
-
-                    for _ in range(abs_change):
-                        if random.random() < a / p:
-                            a += sign
-                            partial += sign * self.phylogeny.ccfs[n]
-                        p += sign
-
-                affected[n] = a
-                assert p == ploidity[n]
-
-            # Taking the purity into account
-            total = purity * total + (1 - purity) * 2
-            partial = purity * partial
-            p = partial / total
+            p = band * purity / (total * purity + 2 * (1 - purity))
 
             reads = np.random.poisson(p * depth * total)
             nonreads = np.random.poisson((1 - p + 1e-6) * depth * total)
@@ -1035,12 +977,6 @@ class Phylogeny:
     """A dictionary mapping each subclone to its parent node."""
     ccfs: Dict[int, float]
     """A dictionary mapping each subclone to its CCF"""
-    weights: Dict[int, float]
-    """A dictionary mapping each subclone to the part of the mutations coming from that subclone. """
-    weights_array: np.ndarray
-    """An array describing the probability of a mutation originating from each subclone."""
-    subtree: Dict[int, list[int]]
-    """Maps each node to all nodes in the subtree rooted by it (Excluding the node)"""
 
     def __init__(self, num_subclones: int):
         """Class to represent simulated tumor phylogeny
@@ -1051,23 +987,6 @@ class Phylogeny:
         """
         self.num_subclones = num_subclones
         self.parents, self.ccfs = self.make_phylogeny()
-        self.weights = self.make_weights()
-
-        self.weights_array = np.zeros(len(self.weights) + 1)
-        for sc, weight in self.weights.items():
-            self.weights_array[sc] = weight
-
-        self.subtree = {node: [] for node in self.weights}
-        for node in self.post_order_iter():
-            if (par := self.parents[node]) is not None:
-                self.subtree[par] += self.subtree[node]
-                self.subtree[par].append(node)
-
-    def sample_subclone(self) -> int:
-        """
-        Samples a subclone according to the weights distribution.
-        """
-        return np.random.choice(np.arange(len(self.weights_array)), p=self.weights_array)
 
     def post_order_iter(self) -> Iterator[int]:
         """
@@ -1175,7 +1094,7 @@ class Phylogeny:
         return cluster_list
 
     def __repr__(self) -> str:
-        return f"Phylogeny({self.ccfs=}, {self.parents=}, {self.weights=}, {self.subtree=})"
+        return f"Phylogeny({self.ccfs=}, {self.parents=})"
 
 
 def simulate_coverage_and_depth(
