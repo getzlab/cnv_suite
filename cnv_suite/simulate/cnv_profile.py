@@ -702,9 +702,7 @@ class CNV_Profile:
             assert len(band_set) == 1
             bands, weights = next(iter(band_set)).data
             weights /= weights.sum()
-
             band = np.random.choice(bands, p=weights)
-
             p = band * purity / (total * purity + 2 * (1 - purity))
 
             reads = np.random.poisson(p * depth * total)
