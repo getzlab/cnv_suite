@@ -50,6 +50,7 @@ class CNV_Profile:
 
     chromosomes: "Dict[str, Chromosome]"
     mutation_bands: "Dict[str, IntervalTree]"
+    """A dictionary from a chromosomes to a [2, bands] NP-arry. An array B represents that with weight B[i, 1] we get a mutation with ploidity B[i, 0]."""
     phylogeny: "Phylogeny"
     cnv_trees: "Optional[Dict[str, Tuple[IntervalTree, IntervalTree]]]"
     cnv_profile_df: Optional[pd.DataFrame]
@@ -461,9 +462,7 @@ class CNV_Profile:
 
         # change contigs to [0-9]+ from chr[0-9XY]+ in input file
         x_coverage_df = switch_contigs(x_coverage_df)
-
         x_coverage_df = x_coverage_df[x_coverage_df["chrom"].isin(self.chromosomes.keys())]
-
         if do_parallel:
             pandarallel.initialize(use_memory_fs=False)
             # bins in cov_collect bed file are inclusive, but end values should be exclusive to compare to intervals
@@ -697,10 +696,14 @@ class CNV_Profile:
 
             pat, mat = total_ploidities[chr]
             assert len(pat[pos]) == len(mat[pos]) == 1
-            total = next(iter(pat[pos])).data[0] + next(iter(mat[pos])).data[0]
+            total = next(iter(pat[pos])).data.cn_change + next(iter(mat[pos])).data.cn_change
 
-            bands, weights = self.mutation_bands[chr][pos]
-            band = np.random.choice(bands, weights)
+            band_set = self.mutation_bands[chr][pos]
+            assert len(band_set) == 1
+            bands, weights = next(iter(band_set)).data
+            weights /= weights.sum()
+
+            band = np.random.choice(bands, p=weights)
 
             p = band * purity / (total * purity + 2 * (1 - purity))
 
@@ -832,6 +835,10 @@ class CNV_Profile:
 
 
 class Chromosome:
+    """
+    An object tracking the ploidity of the maternal and paternal chromosomes.
+    """
+
     name: str
     length: int
     paternal_tree: IntervalTree
