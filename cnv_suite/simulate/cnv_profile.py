@@ -22,6 +22,8 @@ from utils.simulation_utils import (
     get_alt_count,
     get_contigs_from_header,
     get_average_ploidy,
+    read_coverage,
+    read_snvs,
     single_allele_ploidy,
     Haplotype,
 )
@@ -413,7 +415,7 @@ class CNV_Profile:
     def generate_coverage(
         self,
         purity: float,
-        cov_binned: PathLike,
+        cov_binned: PathLike | pd.DataFrame,
         x_coverage: Optional[bool] = None,
         sigma: Optional[float] = None,
         do_parallel=True,
@@ -438,30 +440,11 @@ class CNV_Profile:
             self.cnv_trees is not None
         ), "cnv_trees not computed yet. Run calculate_profiles() before generating coverage."
 
-        x_coverage_df = pd.read_csv(
-            cov_binned,
-            sep="\t",
-            names=[
-                "chrom",
-                "start",
-                "end",
-                "covcorr",
-                "mean_fraglen",
-                "sqrt_avg_fragvar",
-                "n_frags",
-                "tot_reads",
-                "reads_flagged",
-            ],
-            low_memory=False,
-            dtype={"chrom": str},
-            header=None,
-        )
+        if isinstance(cov_binned, PathLike):
+            x_coverage_df = read_coverage(cov_binned)
+        else:
+            x_coverage_df = cov_binned
 
-        # remove mitocondrial contigs if they exist
-        x_coverage_df = x_coverage_df.loc[x_coverage_df.chrom != "chrM"]
-
-        # change contigs to [0-9]+ from chr[0-9XY]+ in input file
-        x_coverage_df = switch_contigs(x_coverage_df)
         x_coverage_df = x_coverage_df[x_coverage_df["chrom"].isin(self.chromosomes.keys())]
         if do_parallel:
             pandarallel.initialize(use_memory_fs=False)
@@ -526,20 +509,25 @@ class CNV_Profile:
         self,
         filename: PathLike,
         purity: float,
-        cov_binned_file: PathLike,
+        cov_binned: PathLike | pd.DataFrame,
         x_coverage=None,
         sigma=None,
         do_parallel=True,
     ):
         """Generate coverage for given purity and binned coverage file and save output to filename"""
-        cov_df = self.generate_coverage(
-            purity, cov_binned_file, x_coverage=x_coverage, sigma=sigma, do_parallel=do_parallel
-        )
+        cov_df = self.generate_coverage(purity, cov_binned, x_coverage=x_coverage, sigma=sigma, do_parallel=do_parallel)
         assert isinstance(cov_df, pd.DataFrame), "Failed to generate coverage!"
         cov_df = cov_df.rename(columns={"chrom": "chr"})
         cov_df.to_csv(filename, sep="\t", index=False, header=False)
 
-    def generate_snvs(self, snv_vcf: PathLike, read_depths: PathLike, purity: float, ref_alt=False, do_parallel=True):
+    def generate_snvs(
+        self,
+        snv_vcf: PathLike | pd.DataFrame,
+        read_depths: PathLike | pd.DataFrame,
+        purity: float,
+        ref_alt=False,
+        do_parallel=True,
+    ):
         """Generate SNV read depths adjusted for CNV profile (and purity), with phasing from vcf file.
 
         :param snv_vcf: VCF file containing SNVs and haplotype of SNVs
@@ -552,38 +540,40 @@ class CNV_Profile:
             print("cnv_trees not computed yet. Run calculate_profiles() before generating snvs.")
             return None, None
 
-        # check if VCF contigs given in header match contigs and lengths in self
-        vcf_contigs = switch_contigs(get_contigs_from_header(snv_vcf))
-        vcf_contigs_pertinent = {k: v for k, v in vcf_contigs.items() if k in self.chromosomes.keys()}
-        if vcf_contigs_pertinent.keys() != self.chromosomes.keys():
-            print(
-                f"WARNING: Not all defined contigs exist in VCF file. "
-                f"Missing contigs: {set(self.chromosomes.keys()) - set(vcf_contigs_pertinent.keys())}"
-            )
-        for k, v in vcf_contigs_pertinent.items():
-            if v != self.chromosome_size[k]:
-                print(
-                    f"WARNING: Contig length for chrom {k} in VCF file does not match CNV Profile "
-                    f"({v} vs. {self.chromosome_size[k]})."
-                )
+        # # check if VCF contigs given in header match contigs and lengths in self
+        # vcf_contigs = switch_contigs(get_contigs_from_header(snv_vcf))
+        # vcf_contigs_pertinent = {k: v for k, v in vcf_contigs.items() if k in self.chromosomes.keys()}
+        # if vcf_contigs_pertinent.keys() != self.chromosomes.keys():
+        #     print(
+        #         f"WARNING: Not all defined contigs exist in VCF file. "
+        #         f"Missing contigs: {set(self.chromosomes.keys()) - set(vcf_contigs_pertinent.keys())}"
+        #     )
+        # for k, v in vcf_contigs_pertinent.items():
+        #     if v != self.chromosome_size[k]:
+        #         print(
+        #             f"WARNING: Contig length for chrom {k} in VCF file does not match CNV Profile "
+        #             f"({v} vs. {self.chromosome_size[k]})."
+        #         )
 
-        snv_df = pd.read_csv(
-            snv_vcf,
-            sep="\t",
-            comment="#",
-            header=None,
-            names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "test"],
-        )
-        if ref_alt:
-            bed_df = pd.read_csv(
-                read_depths, sep="\t", header=0, names=["CHROM", "POS", "REF_BED", "ALT_BED"], dtype={"CHROM": str}
-            )
-            bed_df["DEPTH"] = bed_df["REF_BED"] + bed_df["ALT_BED"]
+        if isinstance(snv_vcf, PathLike):
+            snv_df = read_snvs(snv_vcf)
         else:
-            bed_df = pd.read_csv(read_depths, sep="\t", header=0, names=["CHROM", "POS", "DEPTH"], dtype={"CHROM": str})
+            snv_df = snv_vcf
+
+        if isinstance(read_depths, PathLike):
+            if ref_alt:
+                bed_df = pd.read_csv(
+                    read_depths, sep="\t", header=0, names=["CHROM", "POS", "REF_BED", "ALT_BED"], dtype={"CHROM": str}
+                )
+                bed_df["DEPTH"] = bed_df["REF_BED"] + bed_df["ALT_BED"]
+            else:
+                bed_df = pd.read_csv(
+                    read_depths, sep="\t", header=0, names=["CHROM", "POS", "DEPTH"], dtype={"CHROM": str}
+                )
+        else:
+            bed_df = read_depths
 
         # change contigs to [0-9]+ from chr[0-9XY]+ in input files
-        snv_df = switch_contigs(snv_df)
         bed_df = switch_contigs(bed_df)
 
         snv_df = snv_df.merge(bed_df, on=["CHROM", "POS"], how="inner")
@@ -613,7 +603,6 @@ class CNV_Profile:
             snv_df["maternal_ploidy"].values,  # type: ignore
             purity,
         )
-
         snv_df["maternal_prop"] = (snv_df["maternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values  # type: ignore
 
         snv_df["paternal_prop"] = (snv_df["paternal_ploidy"].values * purity + (1 - purity)) / snv_df["ploidy"].values  # type: ignore
@@ -714,7 +703,13 @@ class CNV_Profile:
         return pd.DataFrame(res, columns=["contig", "position", "t_ref_count", "t_alt_count", "judgement"])
 
     def save_hets_file(
-        self, out_file: PathLike, vcf: PathLike, read_depths: PathLike, purity: float, ref_alt=False, do_parallel=True
+        self,
+        out_file: PathLike,
+        vcf: PathLike | pd.DataFrame,
+        read_depths: PathLike | pd.DataFrame,
+        purity: float,
+        ref_alt=False,
+        do_parallel=True,
     ):
         """
         Generate SNV adjusted depths for given purity for given bed file and save output to filename
@@ -725,6 +720,7 @@ class CNV_Profile:
         * `read_depths`: A file describing the read depth of each SNV.
         * `purity`: The purity of the simulated tumor.
         """
+
         vcf_df, _ = self.generate_snvs(vcf, read_depths, purity, ref_alt=ref_alt, do_parallel=do_parallel)
 
         assert vcf_df is not None, "Failed to generate SNV file!"
@@ -809,9 +805,10 @@ class CNV_Profile:
             correct_phase = True
             while start < size:
                 interval_len = np.floor(np.random.exponential(1e6))
-                tree[start : start + interval_len] = correct_phase
-                correct_phase = not correct_phase
-                start += interval_len
+                if interval_len > 0:
+                    tree[start : start + interval_len] = correct_phase
+                    correct_phase = not correct_phase
+                    start += interval_len
 
             phase_switches[chrom] = tree
 
@@ -1104,9 +1101,9 @@ class Phylogeny:
 
 def simulate_coverage_and_depth(
     cnv_pickle: io.BufferedIOBase,
-    coverage_file: PathLike,
-    vcf_file: PathLike,
-    read_depths: PathLike,
+    coverage_file: PathLike | pd.DataFrame,
+    vcf_file: PathLike | pd.DataFrame,
+    read_depths: PathLike | pd.DataFrame,
     purity: float,
     output_coverage_fn: PathLike,
     output_hets_fn: PathLike,

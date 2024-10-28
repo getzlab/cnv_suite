@@ -56,7 +56,7 @@ def single_allele_ploidy(allele, start, end):
         return sum(interval_totals) / (end - start)
 
 
-def get_contigs_from_header(vcf_fn):
+def get_contigs_from_header(vcf_fn: PathLike) -> Dict[str, int]:
     contig_dict = {}
     with open(vcf_fn, "r") as vcf:
         pre_contig = True
@@ -115,6 +115,52 @@ def switch_contigs(input_data: pd.DataFrame | Dict[str, Any]):
         return input_data
     else:
         raise ValueError(f"Only dictionaries and pandas DataFrames supported. Not {type(input_data)}.")
+
+
+def read_coverage(path: PathLike) -> pd.DataFrame:
+    """
+    Reads a file containing the coverages into a `pandas` dataframe.
+    """
+    x_coverage_df = pd.read_csv(
+        path,
+        sep="\t",
+        names=[
+            "chrom",
+            "start",
+            "end",
+            "covcorr",
+            "mean_fraglen",
+            "sqrt_avg_fragvar",
+            "n_frags",
+            "tot_reads",
+            "reads_flagged",
+        ],
+        low_memory=False,
+        dtype={"chrom": str},
+        header=None,
+    )
+
+    # remove mitocondrial contigs if they exist
+    x_coverage_df = x_coverage_df.loc[x_coverage_df.chrom != "chrM"]
+
+    # change contigs to [0-9]+ from chr[0-9XY]+ in input file
+    x_coverage_df = switch_contigs(x_coverage_df)
+    return x_coverage_df
+
+
+def read_snvs(path: PathLike) -> pd.DataFrame:
+    """
+    Reads a file containing the SNVs or a genome.
+    """
+    snv_df = pd.read_csv(
+        path,
+        sep="\t",
+        comment="#",
+        header=None,
+        names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "test"],
+    )
+    snv_df = switch_contigs(snv_df)
+    return snv_df
 
 
 def dump_tsv(df: pd.DataFrame, path: PathLike, header=True):
