@@ -4,17 +4,14 @@ import numpy as np
 from tqdm import tqdm
 
 
+import compare
 import simulate
 from simulate.cnv_profile import CNV_Profile, simulate_coverage_and_depth
 import simulate.full_dna_sim
-from utils import PathLike
-from utils.simulation_utils import dump_tsv
+from utils import CYTOBAND_PATH, DATA_PATH, PathLike
+from utils.simulation_utils import dump_tsv, read_snvs
 
 
-BASE_PATH = Path(__file__).parent
-DATA_PATH = BASE_PATH / "cnv_data"
-OUT_PATH = BASE_PATH / "out"
-CYTOBAND_PATH = DATA_PATH / "cytoBand.hg38.txt"
 CHROMOSOME_MAP = dict(zip(["chr" + str(x) for x in list(range(1, 23)) + ["X", "Y"]], range(1, 25)))
 
 
@@ -55,33 +52,6 @@ def parse_cytoband(cytoband):
     )
 
 
-def make_read_bed(out_path: PathLike, snv_vcf: PathLike, mean_reads: float):
-    """
-    Makes a BED file containing a random number of reads for each SNV.
-    The reads are samples according to a Poisson distribution with the given mean.
-    """
-    snv_df = pd.read_csv(
-        snv_vcf,
-        sep="\t",
-        comment="#",
-        header=None,
-        names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "test"],
-    )
-
-    chrom = []
-    pos = []
-
-    for _, row in tqdm(snv_df.iterrows(), total=snv_df.shape[0]):
-        chrom.append(row[0])
-        pos.append(row[1])
-
-    reads = np.random.poisson(mean_reads, size=snv_df.shape[0])
-
-    res = pd.DataFrame({"CHROM": chrom, "POS": pos, "READS": reads})
-
-    res.to_csv(out_path, sep="\t", index=False)
-
-
 def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
     # cband = pd.read_csv(CYTOBAND_PATH, sep="\t", names=["chr", "start", "end", "band", "stain"])
     centromere_df = parse_cytoband(CYTOBAND_PATH)
@@ -108,21 +78,17 @@ def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
 
 
 def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
-    snv_df = pd.read_csv(
-        vcf,
-        sep="\t",
-        comment="#",
-        names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "NA12878"],
-    )
-    snv_df = snv_df.query('NA12878 in ("1|0", "0|1")')[["CHROM", "POS"]]
+    snv_df = read_snvs(vcf)
+    snv_df = snv_df.query('test in ("1|0", "0|1")')[["CHROM", "POS"]]
     snv_df["DEPTH"] = snv_df.apply(lambda _: np.random.poisson(read_depth_lambda), axis=1)  # type: ignore
     return snv_df
 
 
 if __name__ == "__main__":
-    # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), OUT_PATH / "read_depth.tsv")
+    # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), DATA_PATH / "read_depth.tsv")
 
-    simulate.full_dna_sim.main()
+    # simulate.full_dna_sim.main()
+    compare.main()
 
     # name = "sim"
     # purity = 0.7

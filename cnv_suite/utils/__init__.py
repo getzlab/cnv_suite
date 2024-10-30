@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Union
 
 PathLike = Union[os.PathLike, str]
@@ -15,6 +16,12 @@ from .cnv_helper_methods import (
 
 
 from .simulation_utils import switch_contigs
+
+BASE_PATH = Path(__file__).parent.parent
+DATA_PATH = BASE_PATH / "cnv_data"
+OUT_PATH = BASE_PATH / "out"
+CYTOBAND_PATH = DATA_PATH / "cytoBand.hg38.txt"
+
 
 _UNIQUE_ID = 0
 

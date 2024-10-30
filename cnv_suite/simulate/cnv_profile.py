@@ -46,11 +46,40 @@ class Event:
     # TODO: Add a consistent timing to the events.
 
 
+DEFAULT_CSIZE = {
+    "1": 249250621,
+    "2": 243199373,
+    "3": 198022430,
+    "4": 191154276,
+    "5": 180915260,
+    "6": 171115067,
+    "7": 159138663,
+    "8": 146364022,
+    "9": 141213431,
+    "10": 135534747,
+    "11": 135006516,
+    "12": 133851895,
+    "13": 115169878,
+    "14": 107349540,
+    "15": 102531392,
+    "16": 90354753,
+    "17": 81195210,
+    "18": 78077248,
+    "19": 59128983,
+    "20": 63025520,
+    "21": 48129895,
+    "22": 51304566,
+    "23": 156040895,
+    "24": 57227415,
+}
+
+
 class CNV_Profile:
     cent_loc: Dict[str, int]
     chromosome_size: Dict[str, int]
 
     chromosomes: "Dict[str, Chromosome]"
+    """A dictionary from a chromosome name to the chromosome object tracking the maternal and paternal ploidities."""
     mutation_bands: "Dict[str, IntervalTree]"
     """A dictionary from a chromosomes to a [2, bands] NP-arry. An array B represents that with weight B[i, 1] we get a mutation with ploidity B[i, 0]."""
     phylogeny: "Phylogeny"
@@ -68,32 +97,7 @@ class CNV_Profile:
             pandas DataFrame with columns 'chr', 'pos'; default is halfway point of chromosomes.
         """
         if not csize:
-            csize = {
-                "1": 249250621,
-                "2": 243199373,
-                "3": 198022430,
-                "4": 191154276,
-                "5": 180915260,
-                "6": 171115067,
-                "7": 159138663,
-                "8": 146364022,
-                "9": 141213431,
-                "10": 135534747,
-                "11": 135006516,
-                "12": 133851895,
-                "13": 115169878,
-                "14": 107349540,
-                "15": 102531392,
-                "16": 90354753,
-                "17": 81195210,
-                "18": 78077248,
-                "19": 59128983,
-                "20": 63025520,
-                "21": 48129895,
-                "22": 51304566,
-                "23": 156040895,
-                "24": 57227415,
-            }
+            csize = dict(DEFAULT_CSIZE)
         elif not isinstance(csize, dict):
             if isinstance(csize, PathLike) and os.path.exists(csize):
                 _, ext = os.path.splitext(csize)

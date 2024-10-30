@@ -7,7 +7,7 @@ import numpy as np
 import math
 import plotly.express as px
 
-from ..utils import get_segment_interval_trees
+from utils import get_segment_interval_trees
 
 
 def num_segments(file_name: Union[str, os.PathLike, None] = None, seg_df: Optional[pd.DataFrame] = None):
