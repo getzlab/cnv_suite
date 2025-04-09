@@ -4,6 +4,7 @@ import glob
 import os
 import re
 from matplotlib import pyplot as plt
+import matplotlib
 from matplotlib.axes import Axes
 import numpy as np
 import numpy.typing as npt
@@ -618,10 +619,11 @@ def compute_output_aad(
 
 
 def compute_output_purity(
-    src_folder: PathLike, solution_folder: PathLike
-) -> dict[float, list[float]]:
+    src_folder: PathLike, solution_folder: PathLike, calibration_cutoff=0.01
+) -> dict[float, list[tuple[float, float]]]:
     """
     Computes the AAD of all solved instances.
+    Returns a dictionary with d[real_purity] = [(pred_purity, part_correct)]
     """
     assert os.path.exists(src_folder)
     assert os.path.exists(solution_folder)
@@ -631,7 +633,7 @@ def compute_output_purity(
         f"{src_folder}/**/sim_profile.tsv", recursive=True
     )
 
-    res: dict[float, list[float]] = {}
+    res: dict[float, list[tuple[float, float]]] = {}
 
     pur_re = re.compile(r"pur_(\d+)")
 
@@ -647,14 +649,23 @@ def compute_output_purity(
         sol_df = pd.read_csv(solution_path, sep="\t")
 
         best_sol, best_ll = 0, -np.inf
+        sol_np = sol_df.to_numpy()
 
-        for sol, ll in sol_df.to_numpy():
+        for sol, ll in sol_np:
             if ll > best_ll:
                 (best_sol, best_ll) = sol, ll
         pur_str = re.findall(pur_re, problem_path)[0]
         pur = int(pur_str) * 10 ** (1 - len(pur_str))
 
-        res.setdefault(pur, []).append(best_sol)
+        total_likelihood = np.logaddexp.reduce(sol_np[:, 1])
+        good_likelihood = np.logaddexp.reduce(
+            sol_np[np.abs(sol_np[:, 0] - pur) <= calibration_cutoff, 1]
+        )
+        if abs(best_sol - pur) > 0.01:
+            print(f"Mistake: {problem_path} real={pur} pred={best_sol}")
+        res.setdefault(pur, []).append(
+            (best_sol, np.exp(good_likelihood - total_likelihood))
+        )
 
     return res
 
@@ -692,18 +703,33 @@ def plot_aad(ax: Axes, aads: dict[float, list[float]]):
     ax.set_ylabel("AAD")
 
 
-def plot_purity(ax: Axes, purities: dict[float, list[float]]):
-    ax.set_xlabel("Simulated purity")
-    ax.set_ylabel("Simulated purity")
+def plot_purity(
+    ax: Axes,
+    purities: dict[float, list[tuple[float, float]]],
+):
+    high_cutoff = 0.9
+    low_cutoff = 0.1
+
+    ax.set_xlabel(
+        f"Simulated purity\nConfidence colors: [0, {low_cutoff}): Red, , [{low_cutoff}, {high_cutoff}): Orange, [{high_cutoff}, 1]: Green "
+    )
+    ax.set_ylabel("Predicted purity")
 
     xs = []
     ys = []
+    colors = []
     for pur, vals in purities.items():
-        for val in vals:
+        for pred, part_good in vals:
             xs.append(pur)
-            ys.append(val)
+            ys.append(pred)
+            if part_good >= high_cutoff:
+                colors.append((0, 1, 0))
+            elif part_good >= low_cutoff:
+                colors.append((1, 0.5, 0))
+            else:
+                colors.append((1, 0, 0))
 
-    ax.scatter(xs, ys)
+    ax.scatter(xs, ys, c=colors, s=5)
 
 
 def main():
@@ -727,7 +753,8 @@ def main():
     ax1.semilogy()
 
     input_addr = r"C:\Users\rsolan\Documents\hap-rs\data\mass"
-    output_addr = r"C:\Users\rsolan\Documents\hap-rs\out\mass5_1"
+    # output_addr = r"C:\Users\rsolan\Documents\hap-rs\out\mass5_01"
+    output_addr = r"C:\Users\rsolan\Documents\hap-rs\out\mass10_01"
 
     # plot_aad(
     #     ax1,

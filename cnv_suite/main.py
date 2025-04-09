@@ -12,7 +12,9 @@ from utils import CYTOBAND_PATH, DATA_PATH, PathLike
 from utils.simulation_utils import dump_tsv, read_snvs
 
 
-CHROMOSOME_MAP = dict(zip(["chr" + str(x) for x in list(range(1, 23)) + ["X", "Y"]], range(1, 25)))
+CHROMOSOME_MAP = dict(
+    zip(["chr" + str(x) for x in list(range(1, 23)) + ["X", "Y"]], range(1, 25))
+)
 
 
 def parse_cytoband(cytoband):
@@ -22,7 +24,13 @@ def parse_cytoband(cytoband):
         if f.readline().startswith("chr\t"):
             has_header = True
 
-    cband = pd.read_csv(cytoband, sep="\t", names=["chr", "start", "end", "band", "stain"] if not has_header else None)
+    cband = pd.read_csv(
+        cytoband,
+        sep="\t",
+        names=["chr", "start", "end", "band", "stain"]
+        if not has_header
+        else None,
+    )
     cband["chr"] = cband["chr"].apply(lambda x: CHROMOSOME_MAP[x])
     chrs = cband["chr"].unique()
     ints = dict(zip(chrs, [{0} for _ in range(0, len(chrs))]))
@@ -48,17 +56,27 @@ def parse_cytoband(cytoband):
         CI[c - 1, :] = sorted(ints[c])
 
     return pd.DataFrame(
-        np.c_[np.tile(np.c_[np.r_[1:25]], [1, 2]).reshape(-1, 1), CI.reshape(-1, 2)], columns=["chr", "start", "end"]
+        np.c_[
+            np.tile(np.c_[np.r_[1:25]], [1, 2]).reshape(-1, 1),
+            CI.reshape(-1, 2),
+        ],
+        columns=["chr", "start", "end"],
     )
 
 
 def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
     # cband = pd.read_csv(CYTOBAND_PATH, sep="\t", names=["chr", "start", "end", "band", "stain"])
     centromere_df = parse_cytoband(CYTOBAND_PATH)
-    centromere_df.loc[centromere_df[centromere_df["start"] == 0].index, "arm"] = "p"
-    centromere_df.loc[centromere_df[centromere_df["start"] != 0].index, "arm"] = "q"
+    centromere_df.loc[
+        centromere_df[centromere_df["start"] == 0].index, "arm"
+    ] = "p"
+    centromere_df.loc[
+        centromere_df[centromere_df["start"] != 0].index, "arm"
+    ] = "q"
 
-    centromere_spec_df = centromere_df.set_index(["chr", "arm"]).unstack()[[("start", "q"), ("end", "p")]]  # type: ignore
+    centromere_spec_df = centromere_df.set_index(["chr", "arm"]).unstack()[
+        [("start", "q"), ("end", "p")]
+    ]  # type: ignore
     centromere_spec_df["avg"] = centromere_spec_df.mean(axis=1).astype(int)
     centromere_spec_df["list"] = centromere_spec_df.apply(
         lambda x: [int(x[("end", "p")]), int(x[("start", "q")])], axis=1
@@ -68,7 +86,11 @@ def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
     centromere_avg_center = centromere_spec_df.to_dict()["avg"]
     # centromere_span_center = centromere_spec_df.to_dict()["list"]
 
-    default_profile = CNV_Profile(num_subclones, csize=DATA_PATH / "NA12878_csizes.tsv", cent_loc=centromere_avg_center)
+    default_profile = CNV_Profile(
+        num_subclones,
+        csize=DATA_PATH / "NA12878_csizes.tsv",
+        cent_loc=centromere_avg_center,
+    )
 
     default_profile.add_cnv_events(**kwargs)
     default_profile._calculate_cnv_profile()
@@ -80,15 +102,20 @@ def simulate_genome(num_subclones=0, **kwargs) -> CNV_Profile:
 def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
     snv_df = read_snvs(vcf)
     snv_df = snv_df.query('test in ("1|0", "0|1")')[["CHROM", "POS"]]
-    snv_df["DEPTH"] = snv_df.apply(lambda _: np.random.poisson(read_depth_lambda), axis=1)  # type: ignore
+    snv_df["DEPTH"] = snv_df.apply(
+        lambda _: np.random.poisson(read_depth_lambda), axis=1
+    )  # type: ignore
     return snv_df
 
 
 if __name__ == "__main__":
-    # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), DATA_PATH / "read_depth.tsv")
+    # dump_tsv(
+    #     make_read_depth(DATA_PATH / "NA12878.vcf", 50),
+    #     DATA_PATH / "read_depth.tsv",
+    # )
 
-    # simulate.full_dna_sim.main()
-    compare.main()
+    simulate.full_dna_sim.main()
+    # compare.main()
 
     # name = "sim"
     # purity = 0.7

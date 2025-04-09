@@ -22,7 +22,14 @@ class Haplotype(enum.Enum):
                 return Haplotype.PATERNAL
 
 
-def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase):
+class SexChromosomes(enum.Enum):
+    XX = enum.auto()
+    XY = enum.auto()
+
+
+def get_alt_count(
+    m_prop, p_prop, m_present, p_present, coverage, correct_phase
+):
     """Returns number of alternate reads generated from a binomial.
 
     If both alleles have mutation (homozygous mutation), returns the given coverage. If neither allele has mutation,
@@ -41,7 +48,9 @@ def get_alt_count(m_prop, p_prop, m_present, p_present, coverage, correct_phase)
         return np.random.binomial(coverage, p_prop)
 
 
-def get_average_ploidy(pat_ploidy: float, mat_ploidy: float, purity: float) -> float:
+def get_average_ploidy(
+    pat_ploidy: float, mat_ploidy: float, purity: float
+) -> float:
     """Get the average ploidy defined by the paternal/maternal tumor CN and the purity."""
     return (pat_ploidy + mat_ploidy) * purity + 2 * (1 - purity)
 
@@ -52,7 +61,10 @@ def single_allele_ploidy(allele, start, end):
     if len(intervals) == 1:
         return intervals.pop().data.cn_change
     else:
-        interval_totals = [(min(i.end, end) - max(i.begin, start)) * i.data.cn_change for i in intervals]
+        interval_totals = [
+            (min(i.end, end) - max(i.begin, start)) * i.data.cn_change
+            for i in intervals
+        ]
         return sum(interval_totals) / (end - start)
 
 
@@ -63,11 +75,18 @@ def get_contigs_from_header(vcf_fn: PathLike) -> Dict[str, int]:
         post_contig = False
         while not post_contig:
             line = vcf.readline()
-            re_groups: re.Match[str] = re.search(r"##(?P<id>\w+)=(?P<value>.*)", line)  # type: ignore
+            re_groups: re.Match[str] = re.search(
+                r"##(?P<id>\w+)=(?P<value>.*)", line
+            )  # type: ignore
             if re_groups.group("id") == "contig":
                 pre_contig = False
-                contig_groups = re.search(r"<ID=(?P<name>[chrXY\d]+),length=(?P<len>\d+)>", re_groups.group("value"))  # type: ignore
-                contig_dict[contig_groups.group("name")] = int(contig_groups.group("len"))  # type: ignore
+                contig_groups = re.search(
+                    r"<ID=(?P<name>[chrXY\d]+),length=(?P<len>\d+)>",
+                    re_groups.group("value"),
+                )  # type: ignore
+                contig_dict[contig_groups.group("name")] = int(
+                    contig_groups.group("len")
+                )  # type: ignore
             elif not pre_contig:
                 post_contig = True
 
@@ -88,24 +107,40 @@ def switch_contigs(input_data: pd.DataFrame | Dict[str, Any]):
     :param input_data: dict or pd.DataFrame with contig as keys or column
     :returns: dict or pd.DataFrame with altered contig names"""
     if isinstance(input_data, pd.DataFrame):
-        contig_column_names = ["Chr", "Chromosome", "Chrom", "Contig"]  # defines possible column names
+        contig_column_names = [
+            "Chr",
+            "Chromosome",
+            "Chrom",
+            "Contig",
+        ]  # defines possible column names
         # accounts for all lower/upper-case
         contig_column_names = (
-            contig_column_names + [s.lower() for s in contig_column_names] + [s.upper() for s in contig_column_names]
+            contig_column_names
+            + [s.lower() for s in contig_column_names]
+            + [s.upper() for s in contig_column_names]
         )
-        contig_column_names = contig_column_names + [s + "s" for s in contig_column_names]  # pluralizes column names
-        column_idx = np.where([c in contig_column_names for c in input_data.columns])[0][0]  # find contig column
+        contig_column_names = contig_column_names + [
+            s + "s" for s in contig_column_names
+        ]  # pluralizes column names
+        column_idx = np.where(
+            [c in contig_column_names for c in input_data.columns]
+        )[0][0]  # find contig column
         column_label = input_data.columns[column_idx]
 
         input_data[column_label] = input_data[column_label].apply(
             lambda x: re.search(r"(?<=chr)[\dXY]+|^[\dXY]+", x).group()  # type: ignore
         )
-        input_data.replace(to_replace={column_label: {"X": "23", "Y": "24"}}, inplace=True)
+        input_data.replace(
+            to_replace={column_label: {"X": "23", "Y": "24"}}, inplace=True
+        )
         # should already be sorted
         # input_data.sort_values([column_label, 'start'], key=natsort.natsort_keygen(), inplace=True)
         return input_data
     elif isinstance(input_data, dict):
-        input_data = {re.search(r"(?<=chr)[\dXY]+|^[\dXY]+", key).group(): loc for key, loc in input_data.items()}  # type: ignore
+        input_data = {
+            re.search(r"(?<=chr)[\dXY]+|^[\dXY]+", key).group(): loc
+            for key, loc in input_data.items()
+        }  # type: ignore
         if "X" in input_data.keys():
             input_data["23"] = input_data["X"]
             input_data.pop("X")
@@ -114,7 +149,9 @@ def switch_contigs(input_data: pd.DataFrame | Dict[str, Any]):
             input_data.pop("Y")
         return input_data
     else:
-        raise ValueError(f"Only dictionaries and pandas DataFrames supported. Not {type(input_data)}.")
+        raise ValueError(
+            f"Only dictionaries and pandas DataFrames supported. Not {type(input_data)}."
+        )
 
 
 def read_coverage(path: PathLike) -> pd.DataFrame:
@@ -157,7 +194,18 @@ def read_snvs(path: PathLike) -> pd.DataFrame:
         sep="\t",
         comment="#",
         header=None,
-        names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "test"],
+        names=[
+            "CHROM",
+            "POS",
+            "ID",
+            "REF",
+            "ALT",
+            "QUAL",
+            "FILTER",
+            "INFO",
+            "FORMAT",
+            "test",
+        ],
     )
     snv_df = switch_contigs(snv_df)
     return snv_df
