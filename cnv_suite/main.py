@@ -113,8 +113,14 @@ if __name__ == "__main__":
     #     make_read_depth(DATA_PATH / "NA12878.vcf", 50),
     #     DATA_PATH / "read_depth.tsv",
     # )
+    import cProfile
 
+    # with cProfile.Profile() as prof:
+    # try:
     simulate.full_dna_sim.main()
+    # finally:
+    #     prof.dump_stats("prof.pr")
+
     # compare.main()
 
     # name = "sim"

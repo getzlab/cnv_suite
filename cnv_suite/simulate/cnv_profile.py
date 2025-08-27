@@ -530,9 +530,9 @@ class CNV_Profile:
         cnv_df = []
         phasing_df = []
 
-        assert (
-            self.cnv_trees is not None
-        ), "Profile's CNV trees were not initialized!"
+        assert self.cnv_trees is not None, (
+            "Profile's CNV trees were not initialized!"
+        )
         for chrom, profile_tree in self.chromosomes.items():
             cnv_df.append(
                 profile_tree.get_cnv_df(
@@ -576,9 +576,9 @@ class CNV_Profile:
         - pandarallel natively uses /dev/shm for message passing and it is recommended to
           do use a single core on dockerized and memory-constrained systems
         """
-        assert (
-            self.cnv_trees is not None
-        ), "cnv_trees not computed yet. Run calculate_profiles() before generating coverage."
+        assert self.cnv_trees is not None, (
+            "cnv_trees not computed yet. Run calculate_profiles() before generating coverage."
+        )
 
         if isinstance(cov_binned, PathLike):
             x_coverage_df = read_coverage(cov_binned)
@@ -593,26 +593,34 @@ class CNV_Profile:
             # bins in cov_collect bed file are inclusive, but end values should be exclusive to compare to intervals
             x_coverage_df["paternal_ploidy"] = x_coverage_df.parallel_apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["chrom"]][0], x["start"], x["end"] + 1
+                    self.cnv_trees[x["chrom"]][0],  # type: ignore
+                    x["start"],
+                    x["end"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
             x_coverage_df["maternal_ploidy"] = x_coverage_df.parallel_apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["chrom"]][1], x["start"], x["end"] + 1
+                    self.cnv_trees[x["chrom"]][1],  # type: ignore
+                    x["start"],
+                    x["end"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
         else:
             x_coverage_df["paternal_ploidy"] = x_coverage_df.apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["chrom"]][0], x["start"], x["end"] + 1
+                    self.cnv_trees[x["chrom"]][0],  # type: ignore
+                    x["start"],
+                    x["end"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
             x_coverage_df["maternal_ploidy"] = x_coverage_df.apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["chrom"]][1], x["start"], x["end"] + 1
+                    self.cnv_trees[x["chrom"]][1],  # type: ignore
+                    x["start"],
+                    x["end"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
@@ -753,26 +761,34 @@ class CNV_Profile:
             pandarallel.initialize()
             snv_df["paternal_ploidy"] = snv_df.parallel_apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["CHROM"]][0], x["POS"], x["POS"] + 1
+                    self.cnv_trees[x["CHROM"]][0],  # type: ignore
+                    x["POS"],
+                    x["POS"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
             snv_df["maternal_ploidy"] = snv_df.parallel_apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["CHROM"]][1], x["POS"], x["POS"] + 1
+                    self.cnv_trees[x["CHROM"]][1],  # type: ignore
+                    x["POS"],
+                    x["POS"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
         else:
             snv_df["paternal_ploidy"] = snv_df.apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["CHROM"]][0], x["POS"], x["POS"] + 1
+                    self.cnv_trees[x["CHROM"]][0],  # type: ignore
+                    x["POS"],
+                    x["POS"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
             snv_df["maternal_ploidy"] = snv_df.apply(
                 lambda x: single_allele_ploidy(
-                    self.cnv_trees[x["CHROM"]][1], x["POS"], x["POS"] + 1
+                    self.cnv_trees[x["CHROM"]][1],  # type: ignore
+                    x["POS"],
+                    x["POS"] + 1,
                 ),  # type: ignore
                 axis=1,
             )
@@ -783,18 +799,18 @@ class CNV_Profile:
             purity,
         )
         snv_df["maternal_prop"] = (
-            snv_df["maternal_ploidy"].values * purity + (1 - purity)
+            snv_df["maternal_ploidy"].values * purity + (1 - purity)  # type: ignore
         ) / snv_df["ploidy"].values  # type: ignore
 
         snv_df["paternal_prop"] = (
-            snv_df["paternal_ploidy"].values * purity + (1 - purity)
+            snv_df["paternal_ploidy"].values * purity + (1 - purity)  # type: ignore
         ) / snv_df["ploidy"].values  # type: ignore
 
         snv_df["maternal_present"] = snv_df["test"].apply(lambda x: x[0] == "1")
         snv_df["paternal_present"] = snv_df["test"].apply(lambda x: x[2] == "1")
 
         snv_df["adjusted_depth"] = np.floor(
-            snv_df["DEPTH"].values * snv_df["ploidy"].values / 2
+            snv_df["DEPTH"].values * snv_df["ploidy"].values / 2  # type: ignore
         ).astype(int)  # type: ignore
 
         # generate phase switch profile
@@ -953,9 +969,9 @@ class CNV_Profile:
     ):
         snv_df, _ = self.generate_snvs(vcf, het_depth_bed, purity)
         assert snv_df is not None, "Failed to generate SNV file!"
-        assert (
-            self.cnv_profile_df is not None
-        ), "Attempted to generate the profile seg file before generating the profile!"
+        assert self.cnv_profile_df is not None, (
+            "Attempted to generate the profile seg file before generating the profile!"
+        )
         # get allele counts from snv_df
         A_alt_mask = snv_df.NA12878.apply(lambda x: int(x[0]) == 1)
         snv_df.loc[:, "A_count"] = 0
