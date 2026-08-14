@@ -87,8 +87,8 @@ def make_read_depth(vcf: PathLike, read_depth_lambda: float) -> pd.DataFrame:
 if __name__ == "__main__":
     # dump_tsv(make_read_depth(DATA_PATH / "NA12878.vcf", 50), DATA_PATH / "read_depth.tsv")
 
-    # simulate.full_dna_sim.main()
-    compare.main()
+    simulate.full_dna_sim.main()
+    # compare.main()
 
     # name = "sim"
     # purity = 0.7
